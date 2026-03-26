@@ -46,43 +46,15 @@ function buildOrgTree(orgs: any[]): any[] {
 // 获取所有任务
 router.get('/tasks', async (req: Request, res: Response) => {
   try {
-    const tenantId = req.query.tenantId as string
-    const status = req.query.status as string
-    
-    const tasks = await (prisma.task as any).findMany({
-      where: {
-        ...(tenantId && { tenantId }),
-        ...(status && { status })
-      },
-      include: {
-        table: true,
-        targets: {
-          include: {
-            submissions: true
-          }
-        }
-      },
+    // Simply return tasks without relations for now
+    const tasks = await prisma.task.findMany({
       orderBy: { createdAt: 'desc' }
     })
     
-    // 计算每个任务的状态统计
-    const tasksWithStats = tasks.map((task: any) => {
-      const total = task.targets.length
-      const submitted = task.targets.filter((t: any) => t.status === 'submitted').length
-      const pending = task.targets.filter((t: any) => t.status === 'pending').length
-      const filling = task.targets.filter((t: any) => t.status === 'filling').length
-      const overdue = task.targets.filter((t: any) => t.status === 'overdue').length
-      
-      return {
-        ...task,
-        stats: { total, submitted, pending, filling, overdue }
-      }
-    })
-    
-    res.json({ success: true, data: tasksWithStats })
-  } catch (error) {
-    console.error(error)
-    res.status(500).json({ success: false, message: '获取任务列表失败' })
+    res.json({ success: true, data: tasks })
+  } catch (error: any) {
+    console.error('Error getting tasks:', error)
+    res.status(500).json({ success: false, message: '获取任务列表失败: ' + (error?.message || '未知错误') })
   }
 })
 

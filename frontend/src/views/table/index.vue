@@ -13,13 +13,13 @@
         </div>
       </div>
       <div class="flex items-center gap-3">
-        <el-button @click="exportData" class="!rounded-lg">
+        <el-button @click="exportData" class="!rounded-lg shadow-sm hover:shadow-md transition-shadow">
           <template #icon>
             <el-icon><Download /></el-icon>
           </template>
           导出
         </el-button>
-        <el-button type="primary" @click="openAddDialog" class="!rounded-lg">
+        <el-button type="primary" @click="openAddDialog" class="!rounded-lg shadow-md hover:shadow-lg transition-shadow">
           <template #icon>
             <el-icon><Plus /></el-icon>
           </template>
@@ -28,11 +28,43 @@
       </div>
     </div>
 
-    <!-- 加载状态 -->
-    <div v-if="loading" class="bg-white rounded-xl p-12 shadow-card text-center">
-      <el-icon class="is-loading text-3xl text-text-tertiary mb-4"><Loader /></el-icon>
-      <p class="text-text-tertiary">加载中...</p>
-    </div>
+    <!-- 骨架屏加载状态 -->
+    <template v-if="pageLoading">
+      <div class="bg-white rounded-xl shadow-card overflow-hidden">
+        <!-- 工具栏骨架屏 -->
+        <div class="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div class="flex items-center gap-4">
+            <div class="w-24 h-5 rounded bg-background-secondary animate-pulse"></div>
+            <div class="w-20 h-5 rounded bg-background-secondary animate-pulse"></div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-20 h-8 rounded-lg bg-background-secondary animate-pulse"></div>
+            <div class="w-24 h-8 rounded-lg bg-background-secondary animate-pulse"></div>
+          </div>
+        </div>
+        <!-- 表头骨架屏 -->
+        <div class="flex items-center px-5 py-3 bg-background-secondary/30 border-b border-border">
+          <div class="w-10 h-4 rounded bg-background-secondary animate-pulse mr-4"></div>
+          <div class="w-10 h-4 rounded bg-background-secondary animate-pulse mr-4"></div>
+          <div v-for="i in 5" :key="i" class="flex-1 h-4 rounded bg-background-secondary animate-pulse mr-4" :style="{ maxWidth: '150px' }"></div>
+          <div class="w-20 h-4 rounded bg-background-secondary animate-pulse"></div>
+        </div>
+        <!-- 数据行骨架屏 -->
+        <div v-for="rowNum in 5" :key="rowNum" class="flex items-center px-5 py-4 border-b border-border/50">
+          <div class="w-10 h-4 rounded bg-background-secondary animate-pulse mr-4"></div>
+          <div class="w-10 h-4 rounded bg-background-secondary animate-pulse mr-4"></div>
+          <div v-for="colNum in 5" :key="colNum" class="flex-1 h-4 rounded bg-background-secondary animate-pulse mr-4" :style="{ maxWidth: '150px' }"></div>
+          <div class="w-20 h-4 rounded bg-background-secondary animate-pulse"></div>
+        </div>
+        <!-- 分页骨架屏 -->
+        <div class="flex items-center justify-between px-5 py-4">
+          <div class="w-32 h-4 rounded bg-background-secondary animate-pulse"></div>
+          <div class="flex items-center gap-2">
+            <div v-for="i in 5" :key="i" class="w-8 h-8 rounded bg-background-secondary animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+    </template>
 
     <!-- 配置加载失败 -->
     <div v-else-if="!tableConfig" class="bg-white rounded-xl p-12 shadow-card text-center">
@@ -55,23 +87,28 @@
     <!-- 表格内容 -->
     <div v-else class="bg-white rounded-xl shadow-card overflow-hidden">
       <!-- 工具栏 -->
-      <div class="flex items-center justify-between px-5 py-4 border-b border-border">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-border bg-background-secondary/30">
         <div class="flex items-center gap-3">
-          <span class="text-sm text-text-tertiary">共 {{ pagination.total }} 条数据</span>
-          <div v-if="selectedRows.length > 0" class="flex items-center gap-2">
-            <el-divider direction="vertical" />
+          <div class="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg shadow-sm">
+            <el-icon class="text-text-tertiary"><Search /></el-icon>
+            <span class="text-sm text-text-secondary">共</span>
+            <span class="text-sm font-semibold text-primary">{{ pagination.total }}</span>
+            <span class="text-sm text-text-secondary">条数据</span>
+          </div>
+          <div v-if="selectedRows.length > 0" class="flex items-center gap-2 px-3 py-1.5 bg-primary/5 rounded-lg">
+            <el-icon class="text-primary"><Check /></el-icon>
             <span class="text-sm text-primary font-medium">已选择 {{ selectedRows.length }} 项</span>
-            <el-button size="small" text type="danger" @click="handleBatchDelete">批量删除</el-button>
+            <el-button size="small" text type="danger" @click="handleBatchDelete" class="!text-functional-danger hover:!bg-functional-danger/10">批量删除</el-button>
           </div>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-3">
           <el-input
             v-model="searchKeyword"
-            placeholder="搜索..."
+            placeholder="搜索数据..."
             prefix-icon="Search"
             size="small"
             clearable
-            class="!w-48 !rounded-lg"
+            class="!w-56 !rounded-lg"
             @input="handleSearch"
           />
         </div>
@@ -87,7 +124,9 @@
         @sort-change="handleSortChange"
         @filter-change="handleFilterChange"
         v-loading="loading"
-        class="!rounded-none"
+        class="!rounded-none custom-table"
+        :row-class-name="tableRowClassName"
+        stripe
       >
         <el-table-column type="selection" width="50" fixed />
 
@@ -149,15 +188,18 @@
             <!-- 显示模式 -->
             <div
               v-else
-              class="cursor-pointer hover:text-primary transition-colors"
+              class="group inline-flex items-center gap-2 cursor-pointer px-2 py-1 rounded-md hover:bg-primary/5 transition-all"
               @click="startEdit(row, field.name, row.rowData[field.name])"
             >
-              <el-tag v-if="field.type === 'checkbox'" size="small" :type="row.rowData[field.name] ? 'success' : 'info'">
+              <el-tag v-if="field.type === 'checkbox'" size="small" :type="row.rowData[field.name] ? 'success' : 'info'" class="!rounded-full">
                 {{ row.rowData[field.name] ? '是' : '否' }}
               </el-tag>
-              <span v-else class="line-clamp-1">
+              <span v-else class="line-clamp-1 text-text-primary group-hover:text-primary transition-colors">
                 {{ getDisplayValue(row.rowData[field.name], field.type) }}
               </span>
+              <el-icon v-if="field.type !== 'checkbox'" class="text-text-tertiary opacity-0 group-hover:opacity-100 transition-opacity text-xs">
+                <Edit />
+              </el-icon>
             </div>
           </template>
         </el-table-column>
@@ -180,16 +222,28 @@
       </el-table>
 
       <!-- 分页 -->
-      <div class="flex items-center justify-between px-5 py-4 border-t border-border bg-background-secondary">
-        <div class="text-sm text-text-tertiary">
-          每页显示 {{ pagination.pageSize }} 条，共 {{ pagination.total }} 条
+      <div class="flex items-center justify-between px-5 py-4 border-t border-border bg-gradient-to-r from-background-secondary/50 to-white">
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-text-tertiary">每页</span>
+          <el-select
+            v-model="pagination.pageSize"
+            size="small"
+            class="!w-20 !rounded-lg"
+            @change="loadData"
+          >
+            <el-option :value="10" label="10" />
+            <el-option :value="20" label="20" />
+            <el-option :value="50" label="50" />
+            <el-option :value="100" label="100" />
+          </el-select>
+          <span class="text-sm text-text-tertiary">条，共 {{ pagination.total }} 条</span>
         </div>
         <el-pagination
           v-model:current-page="pagination.page"
           v-model:page-size="pagination.pageSize"
           :page-sizes="[10, 20, 50, 100]"
           :total="pagination.total"
-          layout="sizes, prev, pager, next"
+          layout="prev, pager, next"
           background
           class="!rounded-lg"
           @size-change="loadData"
@@ -201,17 +255,30 @@
     <!-- 新增数据对话框 -->
     <el-dialog
       v-model="showAddDialog"
-      title="新增数据"
+      :title="'新增数据'"
       width="600px"
       class="!rounded-2xl"
       :close-on-click-modal="false"
+      destroy-on-close
     >
-      <el-form :model="addForm" label-width="100px" class="px-2">
+      <template #header>
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+            <el-icon class="text-primary text-lg"><Plus /></el-icon>
+          </div>
+          <div>
+            <h3 class="text-lg font-semibold text-text-primary">新增数据</h3>
+            <p class="text-sm text-text-tertiary">请填写以下信息</p>
+          </div>
+        </div>
+      </template>
+      <el-form :model="addForm" label-position="top" class="px-4 py-2">
         <el-form-item
           v-for="field in tableConfig?.fields"
           :key="field.id"
           :label="field.name"
           :required="field.required"
+          class="!mb-4"
         >
           <el-input
             v-if="field.type === 'text'"
@@ -289,7 +356,9 @@ import {
   Search,
   Loader,
   AlertTriangle,
-  CircleAlert
+  CircleAlert,
+  Check,
+  Edit
 } from 'lucide-vue-next'
 import * as XLSX from 'xlsx'
 
@@ -297,6 +366,7 @@ const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
+const pageLoading = ref(true)
 const tableConfig = ref<TableConfig | null>(null)
 const tableData = ref<TableRow[]>([])
 const selectedRows = ref<TableRow[]>([])
@@ -358,6 +428,11 @@ const loadConfig = async () => {
     }
   } catch (error) {
     console.error(error)
+  } finally {
+    // 延迟关闭骨架屏，让动画更流畅
+    setTimeout(() => {
+      pageLoading.value = false
+    }, 300)
   }
 }
 
@@ -405,6 +480,13 @@ const handleFilterChange = (filter: any) => {
 const handleSearch = () => {
   pagination.value.page = 1
   loadData()
+}
+
+const tableRowClassName = ({ row }: { row: TableRow }) => {
+  if (editingRow.value === row.id) {
+    return 'editing-row'
+  }
+  return ''
 }
 
 const getColumnFilters = (field: any) => {
@@ -568,5 +650,46 @@ onMounted(() => {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* 表格自定义样式 */
+:deep(.custom-table) {
+  --el-table-border-color: #E5E7EB;
+  --el-table-header-bg-color: #F3F4F6;
+}
+
+:deep(.custom-table .el-table__row) {
+  transition: all 0.2s ease;
+}
+
+:deep(.custom-table .el-table__row:hover > td) {
+  background-color: rgba(0, 82, 217, 0.05) !important;
+}
+
+:deep(.custom-table .editing-row > td) {
+  background-color: rgba(0, 82, 217, 0.1) !important;
+}
+
+:deep(.custom-table .el-table__cell) {
+  padding: 12px 0;
+}
+
+:deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
+  background: rgba(243, 244, 246, 0.3);
+}
+
+:deep(.el-table th.el-table__cell) {
+  font-weight: 600;
+  color: #1F2937;
+}
+
+:deep(.el-pagination.is-background .btn-next),
+:deep(.el-pagination.is-background .btn-prev),
+:deep(.el-pagination.is-background .el-pager li) {
+  border-radius: 8px;
+}
+
+:deep(.el-pagination.is-background .el-pager li:not(.is-disabled).is-active) {
+  background-color: #0052D9;
 }
 </style>

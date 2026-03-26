@@ -1,0 +1,263 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 表格配置表
+model TableConfig {
+  id          String   @id @default(uuid())
+  tenantId    String?  // Optional for backward compatibility, or set a default tenant later
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  config      String   // JSON 格式的表格配置
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  fields      TableField[]
+  data        DynamicData[]
+  tasks       Task[]
+  
+  @@map("table_configs")
+}
+
+// 多租户表
+model Tenant {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organizations Organization[]
+  users         User[]
+  roles         Role[]
+  tables        TableConfig[]
+  tasks         Task[]
+
+  @@map("tenants")
+}
+
+// 组织架构表（支持央企多级架构）
+model Organization {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parentId    String?
+  parent      Organization?  @relation("OrganizationToOrganization", fields: [parentId], references: [id])
+  children    Organization[] @relation("OrganizationToOrganization")
+  name        String
+  code        String
+  type        String   // group(集团), company(公司), department(部门)
+  sort        Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+
+  @@map("organizations")
+}
+
+// 用户表
+model User {
+  id             String   @id @default(uuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orgId          String?
+  organization   Organization? @relation(fields: [orgId], references: [id])
+  username       String   @unique
+  password       String
+  name           String
+  phone          String?
+  email          String?
+  status         Int      @default(1) // 1: 正常, 0: 禁用
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  roles          UserRole[]
+  permissions    UserPermission[]
+
+  @@map("users")
+}
+
+// 角色表
+model Role {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  code        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+// 权限资源表
+model Permission {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique // 例如: "table:create", "user:add"
+  type        String   // menu, button, api
+  parentId    String?
+  parent      Permission?  @relation("PermissionToPermission", fields: [parentId], references: [id])
+  children    Permission[] @relation("PermissionToPermission")
+  sort        Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roles       RolePermission[]
+  users       UserPermission[]
+
+  @@map("permissions")
+}
+
+// 用户-角色关联表
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId    String
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+// 角色-权限关联表
+model RolePermission {
+  id           String     @id @default(uuid())
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// 用户-权限直接关联表（支持独立给人员设置权限）
+model UserPermission {
+  id           String     @id @default(uuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  type         String     @default("allow") // allow or deny
+  createdAt    DateTime   @default(now())
+
+  @@unique([userId, permissionId])
+  @@map("user_permissions")
+}
+
+// 字段配置表
+model TableField {
+  id          String      @id @default(uuid())
+  tableId     String
+  name        String
+  type        String      // text, number, date, select, checkbox, etc.
+  required    Boolean     @default(false)
+  config      String?     // JSON 格式的字段配置（如选项、校验规则等）
+  order       Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  table       TableConfig @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  
+  @@map("table_fields")
+}
+
+// 动态数据表
+model DynamicData {
+  id        String      @id @default(uuid())
+  tableId   String
+  rowData   String      // JSON 格式的行数据
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  table     TableConfig @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  
+  @@map("dynamic_data")
+}
+
+// 任务表（督办任务）
+model Task {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tableId     String
+  table       TableConfig @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  name        String   // 任务名称
+  description String?  // 任务描述
+  deadline    DateTime? // 截止日期
+  status      String   @default("pending") // pending(待下发), published(已下发), completed(已完成), cancelled(已取消)
+  requireLogin Boolean @default(false) // 是否需要登录才能填写
+  allowAnonymous Boolean @default(true) // 是否允许匿名填写
+  createdBy   String   // 创建人ID
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  targets     TaskTarget[]  // 下发目标
+  submissions  TaskSubmission[] // 填写记录
+  
+  @@map("tasks")
+}
+
+// 任务下发目标表
+model TaskTarget {
+  id          String   @id @default(uuid())
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  targetType  String   // organization(组织), user(用户)
+  targetId    String   // 组织ID或用户ID
+  targetName  String   // 目标名称（冗余存储便于显示）
+  status      String   @default("pending") // pending(待填写), filling(填写中), submitted(已提交), overdue(已逾期)
+  fillToken   String?  // 填写令牌（用于无登录访问）
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  submissions TaskSubmission[]
+  
+  @@map("task_targets")
+}
+
+// 任务填写记录表
+model TaskSubmission {
+  id          String   @id @default(uuid())
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  targetId    String
+  target      TaskTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  userId      String?  // 填写人ID（登录用户）
+  userName    String?  // 填写人姓名（冗余存储）
+  data        String   // 填写的JSON数据
+  status      String   @default("draft") // draft(草稿), submitted(已提交)
+  submittedAt DateTime? // 提交时间
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("task_submissions")
+}
+
+// 催办记录表
+model Reminder {
+  id          String   @id @default(uuid())
+  taskId      String
+  targetId    String
+  type        String   // email, sms, system
+  content     String   // 催办内容
+  sentAt      DateTime @default(now())
+  
+  @@map("reminders")
+}

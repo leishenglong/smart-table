@@ -28,6 +28,40 @@
       </div>
     </div>
 
+    <!-- 设置归属组织对话框 -->
+    <el-dialog
+      v-model="showOrgDialog"
+      title="设置数据归属"
+      width="500px"
+      class="!rounded-2xl"
+      :close-on-click-modal="false"
+    >
+      <div class="space-y-4">
+        <p class="text-sm text-text-secondary">将为选中的 {{ selectedRows.length }} 条数据设置归属组织</p>
+        <el-form-item label="归属组织" required>
+          <el-tree-select
+            v-model="selectedOrgId"
+            :data="orgTreeData"
+            :props="{ label: 'name', children: 'children', value: 'id' }"
+            placeholder="请选择组织"
+            check-strictly
+            clearable
+            class="!w-full"
+          />
+        </el-form-item>
+        <div class="text-xs text-text-tertiary">
+          <el-icon class="mr-1"><Info /></el-icon>
+          设置后，这些数据将只能被归属组织及其子组织的用户查看
+        </div>
+      </div>
+      <template #footer>
+        <div class="flex justify-end gap-3">
+          <el-button @click="showOrgDialog = false" class="!rounded-lg">取消</el-button>
+          <el-button type="primary" @click="confirmSetOrg" class="!rounded-lg" :loading="orgSettingLoading">确定</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <!-- 骨架屏加载状态 -->
     <template v-if="pageLoading">
       <div class="bg-white rounded-xl shadow-card overflow-hidden">
@@ -98,6 +132,7 @@
           <div v-if="selectedRows.length > 0" class="flex items-center gap-2 px-3 py-1.5 bg-primary/5 rounded-lg">
             <el-icon class="text-primary"><Check /></el-icon>
             <span class="text-sm text-primary font-medium">已选择 {{ selectedRows.length }} 项</span>
+            <el-button size="small" text type="primary" @click="openOrgDialog" class="!text-primary hover:!bg-primary/10">设置归属</el-button>
             <el-button size="small" text type="danger" @click="handleBatchDelete" class="!text-functional-danger hover:!bg-functional-danger/10">批量删除</el-button>
           </div>
         </div>
@@ -347,6 +382,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { tableApi, dataApi } from '@/api/table'
+import { organizationApi } from '@/api/organization'
 import type { TableConfig, TableField, TableRow } from '@/types/table'
 import {
   ArrowLeft,
@@ -358,7 +394,8 @@ import {
   AlertTriangle,
   CircleAlert,
   Check,
-  Edit
+  Edit,
+  Info
 } from 'lucide-vue-next'
 import * as XLSX from 'xlsx'
 
@@ -389,6 +426,12 @@ const editInputRef = ref<any>(null)
 const sortBy = ref('')
 const sortOrder = ref<'asc' | 'desc'>('asc')
 const filters = ref<Record<string, any[]>>({})
+
+// 批量设置归属
+const showOrgDialog = ref(false)
+const selectedOrgId = ref<string | null>(null)
+const orgTreeData = ref<any[]>([])
+const orgSettingLoading = ref(false)
 
 const parseFieldConfig = (field: TableField) => ({
   ...field,
@@ -494,6 +537,47 @@ const getColumnFilters = (field: any) => {
     return field.config.options.map((opt: string) => ({ text: opt, value: opt }))
   }
   return undefined
+}
+
+// 加载组织树
+const loadOrgTree = async () => {
+  try {
+    const res = await organizationApi.getOrganizationTree()
+    if (res.success && res.data) {
+      orgTreeData.value = res.data
+    }
+  } catch (error) {
+    console.error(error)
+  }
+}
+
+// 打设置归属对话框
+const openOrgDialog = () => {
+  if (selectedRows.value.length === 0) {
+    ElMessage.warning('请先选择要设置的数据')
+    return
+  }
+  selectedOrgId.value = null
+  showOrgDialog.value = true
+}
+
+// 确认设置归属
+const confirmSetOrg = async () => {
+  const tableId = route.params.id as string
+  const ids = selectedRows.value.map(row => row.id)
+
+  orgSettingLoading.value = true
+  try {
+    await dataApi.setBatchOrg(tableId, ids, selectedOrgId.value)
+    ElMessage.success('归属设置成功')
+    showOrgDialog.value = false
+    selectedRows.value = []
+    loadData()
+  } catch (error: any) {
+    ElMessage.error(error?.message || '设置失败')
+  } finally {
+    orgSettingLoading.value = false
+  }
 }
 
 const openAddDialog = () => {
@@ -633,6 +717,7 @@ const goToConfig = () => {
 onMounted(() => {
   loadConfig()
   loadData()
+  loadOrgTree()
 })
 </script>
 

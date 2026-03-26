@@ -54,6 +54,7 @@
           />
         </div>
         <div class="flex items-center gap-3">
+          <el-button @click="openAllowedOrgsDialog" type="warning" plain>授权管理</el-button>
           <el-button @click="saveConfig" type="primary">保存配置</el-button>
           <el-button v-if="tableId && fields.length > 0" @click="goToTable" type="success">查看表格</el-button>
         </div>
@@ -63,7 +64,7 @@
       <div class="flex-1 p-6 overflow-auto">
         <div class="bg-white rounded-xl shadow-sm p-6">
           <h3 class="text-lg font-medium text-text-primary mb-4">表格预览</h3>
-          
+
           <el-table :data="previewData" border>
             <el-table-column type="index" label="#" width="60" />
             <el-table-column
@@ -77,7 +78,7 @@
               </template>
             </el-table-column>
           </el-table>
-          
+
           <div v-if="fields.length === 0" class="text-center py-12 text-text-tertiary">
             <div class="mb-4">暂无字段，请添加字段</div>
             <el-button type="primary" @click="addField">添加第一个字段</el-button>
@@ -162,6 +163,43 @@
       </div>
     </div>
 
+    <!-- 授权组织选择对话框 -->
+    <el-dialog
+      v-model="showAllowedOrgsDialog"
+      title="表格授权管理"
+      width="500px"
+      class="!rounded-2xl"
+      :close-on-click-modal="false"
+    >
+      <div class="space-y-4">
+        <p class="text-sm text-text-secondary">
+          设置哪些组织可以访问此表格。创建者始终有权限访问。
+        </p>
+        <el-tree-select
+          v-model="tempAllowedOrgs"
+          :data="orgTreeData"
+          :props="{ label: 'name', children: 'children', value: 'id' }"
+          placeholder="选择授权组织"
+          multiple
+          check-strictly
+          show-checkbox
+          clearable
+          class="!w-full"
+          :render-after-expand="false"
+        />
+        <div class="text-xs text-text-tertiary">
+          <el-icon class="mr-1"><Info /></el-icon>
+          授权给父组织后，其子组织将自动继承访问权限
+        </div>
+      </div>
+      <template #footer>
+        <div class="flex justify-end gap-3">
+          <el-button @click="showAllowedOrgsDialog = false" class="!rounded-lg">取消</el-button>
+          <el-button type="primary" @click="saveAllowedOrgs" class="!rounded-lg" :loading="savingAllowedOrgs">保存授权</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <!-- 字段类型选择对话框 -->
     <el-dialog v-model="showFieldDialog" title="选择字段类型" width="400px">
       <div class="grid grid-cols-2 gap-3">
@@ -192,7 +230,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { tableApi } from '@/api/table'
+import { organizationApi } from '@/api/organization'
 import type { TableField, FieldType } from '@/types/table'
+import { Info } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -202,6 +242,12 @@ const tableName = ref('新建表格')
 const fields = ref<TableField[]>([])
 const selectedFieldIndex = ref<number | null>(null)
 const showFieldDialog = ref(false)
+
+// 授权组织管理
+const showAllowedOrgsDialog = ref(false)
+const tempAllowedOrgs = ref<string[]>([])
+const orgTreeData = ref<any[]>([])
+const savingAllowedOrgs = ref(false)
 
 const selectedField = computed(() => {
   if (selectedFieldIndex.value === null) return null
@@ -334,7 +380,57 @@ const goBack = () => {
   router.push('/')
 }
 
+// 加载组织树
+const loadOrgTree = async () => {
+  try {
+    const res = await organizationApi.getOrganizationTree()
+    if (res.success && res.data) {
+      orgTreeData.value = res.data
+    }
+  } catch (error) {
+    console.error(error)
+  }
+}
+
+// 打开授权对话框
+const openAllowedOrgsDialog = async () => {
+  if (!tableId.value) {
+    ElMessage.warning('请先保存表格后再设置授权')
+    return
+  }
+  await loadOrgTree()
+  // 从当前表格配置中获取 allowedOrgs
+  try {
+    const res = await tableApi.getTable(tableId.value)
+    if (res.success && res.data) {
+      const allowedOrgs = res.data.allowedOrgs
+      tempAllowedOrgs.value = allowedOrgs ? JSON.parse(allowedOrgs) : []
+    }
+  } catch (error) {
+    console.error(error)
+    tempAllowedOrgs.value = []
+  }
+  showAllowedOrgsDialog.value = true
+}
+
+// 保存授权设置
+const saveAllowedOrgs = async () => {
+  if (!tableId.value) return
+
+  savingAllowedOrgs.value = true
+  try {
+    await tableApi.updateAllowedOrgs(tableId.value, tempAllowedOrgs.value)
+    ElMessage.success('授权设置已保存')
+    showAllowedOrgsDialog.value = false
+  } catch (error: any) {
+    ElMessage.error(error?.message || '保存授权失败')
+  } finally {
+    savingAllowedOrgs.value = false
+  }
+}
+
 onMounted(() => {
   loadConfig()
+  loadOrgTree()
 })
 </script>

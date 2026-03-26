@@ -280,7 +280,7 @@
     >
       <div class="space-y-4">
         <div class="flex items-center gap-2 p-3 bg-primary-50 rounded-lg text-primary text-sm">
-          <el-icon><InfoFilled /></el-icon>
+          <el-icon><Info /></el-icon>
           <span>描述您想要的表格，AI 将自动生成表格结构</span>
         </div>
         <el-input

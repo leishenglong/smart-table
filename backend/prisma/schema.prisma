@@ -15,15 +15,17 @@ model TableConfig {
   id          String   @id @default(uuid())
   tenantId    String?  // Optional for backward compatibility, or set a default tenant later
   tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy   String?  // 创建者用户ID
   name        String
   description String?
   config      String   // JSON 格式的表格配置
+  allowedOrgs String?  // JSON 格式，允许访问的组织ID列表
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   fields      TableField[]
   data        DynamicData[]
   tasks       Task[]
-  
+
   @@map("table_configs")
 }
 
@@ -182,12 +184,13 @@ model TableField {
 // 动态数据表
 model DynamicData {
   id        String      @id @default(uuid())
+  orgId     String?     // 填报组织ID（用于数据权限控制）
   tableId   String
   rowData   String      // JSON 格式的行数据
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
   table     TableConfig @relation(fields: [tableId], references: [id], onDelete: Cascade)
-  
+
   @@map("dynamic_data")
 }
 

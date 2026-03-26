@@ -1,8 +1,43 @@
 import { Router, Request, Response } from 'express'
 import { PrismaClient } from '@prisma/client'
+import { authenticate } from '../middleware/authMiddleware'
 
 const router = Router()
-const prisma = new PrismaClient()
+const prisma: any = new PrismaClient()
+
+// 获取用户可访问的所有组织节点（包含自己及所有子节点）
+async function getAccessibleOrgIds(orgId: string | null): Promise<string[]> {
+  if (!orgId) return []
+
+  const orgIds = new Set<string>([orgId])
+
+  // 递归获取所有子节点
+  async function collectChildren(parentId: string) {
+    const children = await prisma.organization.findMany({
+      where: { parentId }
+    })
+    for (const child of children) {
+      orgIds.add(child.id)
+      await collectChildren(child.id)
+    }
+  }
+
+  await collectChildren(orgId)
+  return Array.from(orgIds)
+}
+
+// 检查是否是超管（admin、拥有 *:* 权限、或没有任何权限配置的用户）
+function isSuperAdmin(permissions: string[]): boolean {
+  if (!permissions || permissions.length === 0) return true
+  return permissions.includes('*:*') || permissions.includes('admin')
+}
+
+// 检查是否是集团层面（type = 'group'）
+async function isGroupLevel(orgId: string | null): Promise<boolean> {
+  if (!orgId) return false
+  const org = await prisma.organization.findUnique({ where: { id: orgId } })
+  return org?.type === 'group'
+}
 
 // 获取所有组织（树形结构）
 router.get('/organizations', async (req: Request, res: Response) => {
@@ -43,14 +78,44 @@ function buildOrgTree(orgs: any[]): any[] {
   return roots
 }
 
-// 获取所有任务
-router.get('/tasks', async (req: Request, res: Response) => {
+// 获取所有任务（带数据权限过滤）
+router.get('/tasks', authenticate, async (req: Request, res: Response) => {
   try {
-    // Simply return tasks without relations for now
+    const user = req.user!
+    const tenantId = req.query.tenantId as string
+
+    // 超管不受限制
+    if (isSuperAdmin(user.permissions)) {
+      const tasks = await prisma.task.findMany({
+        where: tenantId ? { tenantId } : {},
+        orderBy: { createdAt: 'desc' }
+      })
+      return res.json({ success: true, data: tasks })
+    }
+
+    // 普通用户：获取自己及子组织的任务
+    const accessibleOrgIds = await getAccessibleOrgIds(user.orgId)
+
+    // 获取下发到这些组织的任务
+    const targets = await prisma.taskTarget.findMany({
+      where: {
+        targetType: 'organization',
+        targetId: { in: accessibleOrgIds }
+      },
+      select: { taskId: true }
+    })
+
+    const taskIds = [...new Set(targets.map((t: any) => t.taskId))]
+
+    // 获取这些任务，并确保属于同一租户
     const tasks = await prisma.task.findMany({
+      where: {
+        id: { in: taskIds },
+        tenantId: tenantId || user.tenantId
+      },
       orderBy: { createdAt: 'desc' }
     })
-    
+
     res.json({ success: true, data: tasks })
   } catch (error: any) {
     console.error('Error getting tasks:', error)
@@ -58,9 +123,20 @@ router.get('/tasks', async (req: Request, res: Response) => {
   }
 })
 
-// 创建任务
-router.post('/tasks', async (req: Request, res: Response) => {
+// 创建任务（仅集团层面可创建）
+router.post('/tasks', authenticate, async (req: Request, res: Response) => {
   try {
+    const user = req.user!
+
+    // 检查是否是超管
+    if (!isSuperAdmin(user.permissions)) {
+      // 检查是否是集团层面
+      const isGroup = await isGroupLevel(user.orgId)
+      if (!isGroup) {
+        return res.status(403).json({ success: false, message: '只有集团层面可以创建任务' })
+      }
+    }
+
     const { tenantId, tableId, name, description, deadline, requireLogin, allowAnonymous, targetOrgIds, createdBy } = req.body
     
     // 创建任务
@@ -152,9 +228,19 @@ router.get('/tasks/:id', async (req: Request, res: Response) => {
   }
 })
 
-// 下发任务给组织
-router.post('/tasks/:id/publish', async (req: Request, res: Response) => {
+// 下发任务给组织（仅集团层面）
+router.post('/tasks/:id/publish', authenticate, async (req: Request, res: Response) => {
   try {
+    const user = req.user!
+
+    // 检查是否是超管
+    if (!isSuperAdmin(user.permissions)) {
+      const isGroup = await isGroupLevel(user.orgId)
+      if (!isGroup) {
+        return res.status(403).json({ success: false, message: '只有集团层面可以下发任务' })
+      }
+    }
+
     const id = req.params.id
     const { targetOrgIds } = req.body
     

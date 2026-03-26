@@ -14,6 +14,58 @@ const getTenantId = (req: Request) => {
   return (req.headers['x-tenant-id'] as string) || req.user?.tenantId
 }
 
+// 检查是否是超管（admin、拥有 *:* 权限、或没有任何权限配置的用户）
+function isSuperAdmin(permissions: string[]): boolean {
+  if (!permissions || permissions.length === 0) return true
+  return permissions.includes('*:*') || permissions.includes('admin')
+}
+
+// 获取用户可访问的所有组织节点（包含自己及所有子节点）
+async function getAccessibleOrgIds(orgId: string | null): Promise<string[]> {
+  if (!orgId) return []
+
+  const orgIds = new Set<string>([orgId])
+
+  // 递归获取所有子节点
+  async function collectChildren(parentId: string) {
+    const children = await prisma.organization.findMany({
+      where: { parentId }
+    })
+    for (const child of children) {
+      orgIds.add(child.id)
+      await collectChildren(child.id)
+    }
+  }
+
+  await collectChildren(orgId)
+  return Array.from(orgIds)
+}
+
+// 检查用户是否有权限访问表格
+async function canAccessTable(user: any, table: any): Promise<boolean> {
+  // 超管可以访问所有表格
+  if (isSuperAdmin(user.permissions)) return true
+
+  // 创建者可以访问自己的表格
+  if (table.createdBy === user.id) return true
+
+  // 检查表格是否授权给了用户所在的组织（或子组织）
+  if (table.allowedOrgs) {
+    try {
+      const allowedOrgs = JSON.parse(table.allowedOrgs)
+      if (Array.isArray(allowedOrgs) && allowedOrgs.length > 0) {
+        const accessibleOrgs = await getAccessibleOrgIds(user.orgId)
+        // 检查是否有交集
+        return allowedOrgs.some((orgId: string) => accessibleOrgs.includes(orgId))
+      }
+    } catch (e) {
+      // ignore parse error
+    }
+  }
+
+  return false
+}
+
 const normalizeFieldName = (name: any) => String(name ?? '').trim()
 
 const getFieldValidationError = (fields: any) => {
@@ -86,15 +138,31 @@ const migrateDynamicRowsForFields = async (tableId: string, existingFields: any[
 }
 
 
-// 获取所有表格配置
+// 获取所有表格配置（带权限过滤）
 router.get('/', async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req)
+    const user = req.user!
     if (!tenantId) {
       return res.status(400).json({ success: false, message: '缺少租户信息' })
     }
 
-    const tables = await prisma.tableConfig.findMany({
+    // 超管直接返回所有表格
+    if (isSuperAdmin(user.permissions)) {
+      const tables = await prisma.tableConfig.findMany({
+        where: { tenantId },
+        include: {
+          fields: {
+            orderBy: { order: 'asc' }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      })
+      return res.json({ success: true, data: tables })
+    }
+
+    // 普通用户：过滤有权限的表格
+    const allTables = await prisma.tableConfig.findMany({
       where: { tenantId },
       include: {
         fields: {
@@ -103,17 +171,26 @@ router.get('/', async (req: Request, res: Response) => {
       },
       orderBy: { createdAt: 'desc' }
     })
-    res.json({ success: true, data: tables })
+
+    const accessibleTables = []
+    for (const table of allTables) {
+      if (await canAccessTable(user, table)) {
+        accessibleTables.push(table)
+      }
+    }
+
+    res.json({ success: true, data: accessibleTables })
   } catch (error) {
     res.status(500).json({ success: false, message: '获取表格列表失败' })
   }
 })
 
-// 获取单个表格配置
+// 获取单个表格配置（带权限检查）
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params
     const tenantId = getTenantId(req)
+    const user = req.user!
 
     const table = await prisma.tableConfig.findFirst({
       where: { id: String(id), tenantId },
@@ -126,6 +203,12 @@ router.get('/:id', async (req: Request, res: Response) => {
     if (!table) {
       return res.status(404).json({ success: false, message: '表格不存在或无权访问' })
     }
+
+    // 检查权限
+    if (!isSuperAdmin(user.permissions) && !(await canAccessTable(user, table))) {
+      return res.status(403).json({ success: false, message: '无权访问此表格' })
+    }
+
     res.json({ success: true, data: table })
   } catch (error) {
     res.status(500).json({ success: false, message: '获取表格详情失败' })
@@ -135,10 +218,19 @@ router.get('/:id', async (req: Request, res: Response) => {
 // 创建表格配置
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { name, description, fields = [], config } = req.body
+    const { name, description, fields = [], config, allowedOrgs } = req.body
     const tenantId = getTenantId(req)
+    const user = req.user!
     if (!tenantId) {
       return res.status(400).json({ success: false, message: '缺少租户信息' })
+    }
+
+    // 只有集团层面或超管可以创建表格
+    if (!isSuperAdmin(user.permissions)) {
+      const org = await prisma.organization.findUnique({ where: { id: user.orgId } })
+      if (!org || org.type !== 'group') {
+        return res.status(403).json({ success: false, message: '只有集团层面可以创建表格' })
+      }
     }
 
     const fieldError = getFieldValidationError(fields)
@@ -146,12 +238,17 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: fieldError })
     }
 
+    // 默认授权给创建者所在的组织
+    const defaultAllowedOrgs = allowedOrgs || (user.orgId ? [user.orgId] : [])
+
     const table = await prisma.tableConfig.create({
       data: {
         tenantId,
+        createdBy: user.id,
         name: String(name || '').trim(),
         description,
         config: JSON.stringify(config || {}),
+        allowedOrgs: JSON.stringify(defaultAllowedOrgs),
         fields: {
           create: fields.map((field: any, index: number) => ({
             name: normalizeFieldName(field.name),
@@ -224,6 +321,50 @@ router.delete('/:id', async (req: Request, res: Response) => {
     res.json({ success: true, message: '表格删除成功' })
   } catch (error) {
     res.status(500).json({ success: false, message: '删除表格失败' })
+  }
+})
+
+// 更新表格授权组织
+router.put('/:id/allowed-orgs', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    const { allowedOrgs } = req.body
+    const tenantId = getTenantId(req)
+    const user = req.user!
+
+    if (!tenantId) {
+      return res.status(400).json({ success: false, message: '缺少租户信息' })
+    }
+
+    // 检查表格是否存在
+    const existingTable = await prisma.tableConfig.findFirst({
+      where: { id: String(id), tenantId }
+    })
+    if (!existingTable) {
+      return res.status(404).json({ success: false, message: '表格不存在' })
+    }
+
+    // 只有超管、创建者或集团层面可以修改授权
+    if (!isSuperAdmin(user.permissions)) {
+      if (existingTable.createdBy !== user.id) {
+        const org = await prisma.organization.findUnique({ where: { id: user.orgId } })
+        if (!org || org.type !== 'group') {
+          return res.status(403).json({ success: false, message: '只有集团层面或表格创建者可以修改授权' })
+        }
+      }
+    }
+
+    const table = await prisma.tableConfig.update({
+      where: { id: String(id) },
+      data: {
+        allowedOrgs: JSON.stringify(allowedOrgs || [])
+      }
+    })
+
+    res.json({ success: true, data: table, message: '授权设置已更新' })
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ success: false, message: '更新授权失败' })
   }
 })
 

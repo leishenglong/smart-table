@@ -5,24 +5,28 @@ import type { TableConfig, TableField, ApiResponse, TableRow } from '@/types/tab
 export const tableApi = {
   // 获取所有表格
   getTables: () => request.get<any, ApiResponse<TableConfig[]>>('/tables'),
-  
+
   // 获取单个表格配置
   getTable: (id: string) => request.get<any, ApiResponse<TableConfig>>(`/tables/${id}`),
-  
+
   // 创建表格
   createTable: (data: { name: string; description?: string; fields: TableField[]; config?: any }) =>
     request.post<any, ApiResponse<TableConfig>>('/tables', data),
-  
+
   // 更新表格
   updateTable: (id: string, data: Partial<TableConfig>) =>
     request.put<any, ApiResponse<TableConfig>>(`/tables/${id}`, data),
-  
+
   // 删除表格
   deleteTable: (id: string) => request.delete<any, ApiResponse>(`/tables/${id}`),
-  
+
   // 更新字段
   updateFields: (id: string, fields: TableField[]) =>
-    request.put<any, ApiResponse>(`/tables/${id}/fields`, { fields })
+    request.put<any, ApiResponse>(`/tables/${id}/fields`, { fields }),
+
+  // 更新授权组织
+  updateAllowedOrgs: (id: string, allowedOrgs: string[]) =>
+    request.put<any, ApiResponse>(`/tables/${id}/allowed-orgs`, { allowedOrgs })
 }
 
 // 数据相关 API
@@ -62,7 +66,11 @@ export const dataApi = {
   
   // 批量导入数据
   importBatch: (tableId: string, rows: Record<string, any>[]) =>
-    request.post<any, ApiResponse>(`/data/${tableId}/batch`, { rows })
+    request.post<any, ApiResponse>(`/data/${tableId}/batch`, { rows }),
+
+  // 批量设置数据归属组织
+  setBatchOrg: (tableId: string, ids: string[], orgId: string | null) =>
+    request.put<any, ApiResponse>(`/data/${tableId}/batch-org`, { ids, orgId })
 }
 
 // AI 相关 API

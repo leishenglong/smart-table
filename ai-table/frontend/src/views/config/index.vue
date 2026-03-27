@@ -178,7 +178,8 @@
         <el-tree-select
           v-model="tempAllowedOrgs"
           :data="orgTreeData"
-          :props="{ label: 'name', children: 'children', value: 'id' }"
+          node-key="id"
+          :props="{ label: 'name', children: 'children' }"
           placeholder="选择授权组织"
           multiple
           check-strictly

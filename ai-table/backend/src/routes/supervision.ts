@@ -26,9 +26,9 @@ async function getAccessibleOrgIds(orgId: string | null): Promise<string[]> {
   return Array.from(orgIds)
 }
 
-// 检查是否是超管（admin、拥有 *:* 权限、或没有任何权限配置的用户）
+// 检查是否是超管（admin、拥有 *:* 权限）
 function isSuperAdmin(permissions: string[]): boolean {
-  if (!permissions || permissions.length === 0) return true
+  if (!permissions || permissions.length === 0) return false
   return permissions.includes('*:*') || permissions.includes('admin')
 }
 

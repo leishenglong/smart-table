@@ -14,6 +14,11 @@
         <el-table-column prop="name" label="姓名" />
         <el-table-column prop="phone" label="手机号" />
         <el-table-column prop="email" label="邮箱" />
+        <el-table-column prop="organization" label="所在组织">
+          <template #default="{ row }">
+            {{ row.organization?.name || '-' }}
+          </template>
+        </el-table-column>
         <el-table-column prop="status" label="状态">
           <template #default="{ row }">
             <el-tag :type="row.status === 1 ? 'success' : 'danger'">

@@ -44,8 +44,20 @@ request.interceptors.response.use(
   },
   error => {
     console.error('API Error:', error)
+    console.error('Error response data:', error.response?.data)
 
-    const message = error.response?.data?.message || error.response?.data?.error || '请求失败，请稍后重试'
+    const errorData = error.response?.data
+    let message = '请求失败，请稍后重试'
+
+    if (typeof errorData === 'string') {
+      message = errorData
+    } else if (errorData?.message) {
+      message = errorData.message
+    } else if (errorData?.error) {
+      message = errorData.error
+    } else if (errorData?.code === 'invalid_type') {
+      message = `${errorData.path.join('.')}: ${errorData.message}`
+    }
 
     if (error.response?.status === 401) {
       const userStore = useUserStore()

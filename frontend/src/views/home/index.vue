@@ -202,6 +202,15 @@
                   <el-button
                     size="small"
                     text
+                    @click.stop="openAllowedOrgsDialog(table.id!)"
+                    class="!text-text-secondary hover:!text-primary"
+                    title="授权管理"
+                  >
+                    <el-icon><Share /></el-icon>
+                  </el-button>
+                  <el-button
+                    size="small"
+                    text
                     @click.stop="editTable(table.id!)"
                     class="!text-text-secondary hover:!text-primary"
                   >
@@ -233,6 +242,44 @@
 
     <!-- 关闭v-else模板 -->
     </template>
+
+    <!-- 授权管理对话框 -->
+    <el-dialog
+      v-model="showAllowedOrgsDialog"
+      title="表格授权管理"
+      width="500px"
+      class="!rounded-2xl"
+      :close-on-click-modal="false"
+    >
+      <div class="space-y-4">
+        <p class="text-sm text-text-secondary">
+          设置哪些组织可以访问此表格。创建者始终有权限访问。
+        </p>
+        <el-tree-select
+          v-model="tempAllowedOrgs"
+          :data="orgTreeData"
+          node-key="id"
+          :props="{ label: 'name', children: 'children' }"
+          placeholder="选择授权组织"
+          multiple
+          check-strictly
+          show-checkbox
+          clearable
+          class="!w-full"
+          :render-after-expand="false"
+        />
+        <div class="text-xs text-text-tertiary">
+          <el-icon class="mr-1"><Info /></el-icon>
+          授权给父组织后，其子组织将自动继承访问权限
+        </div>
+      </div>
+      <template #footer>
+        <div class="flex justify-end gap-3">
+          <el-button @click="showAllowedOrgsDialog = false" class="!rounded-lg">取消</el-button>
+          <el-button type="primary" @click="saveAllowedOrgs" class="!rounded-lg" :loading="savingAllowedOrgs">保存授权</el-button>
+        </div>
+      </template>
+    </el-dialog>
 
     <!-- 创建表格对话框 -->
     <el-dialog
@@ -446,6 +493,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { tableApi, aiApi, dataApi } from '@/api/table'
+import { organizationApi } from '@/api/organization'
 import type { TableConfig } from '@/types/table'
 import {
   Zap,
@@ -466,7 +514,9 @@ import {
   LayoutDashboard,
   List,
   Calendar,
-  TrendingUp
+  TrendingUp,
+  Share,
+  Info
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -481,6 +531,13 @@ const showCreateDialog = ref(false)
 const showAIDialog = ref(false)
 const showImportDialog = ref(false)
 const showExcelDialog = ref(false)
+
+// 授权管理
+const showAllowedOrgsDialog = ref(false)
+const tempAllowedOrgs = ref<string[]>([])
+const orgTreeData = ref<any[]>([])
+const savingAllowedOrgs = ref(false)
+const currentEditingTableId = ref<string | null>(null)
 
 const createForm = ref({
   name: '',
@@ -639,6 +696,52 @@ const loadTables = async () => {
 
 const goToTable = (id: string) => {
   router.push(`/table/${id}`)
+}
+
+// 加载组织树
+const loadOrgTree = async () => {
+  try {
+    const res = await organizationApi.getOrganizationTree()
+    if (res.success && res.data) {
+      orgTreeData.value = res.data
+    }
+  } catch (error) {
+    console.error(error)
+  }
+}
+
+// 打开授权对话框
+const openAllowedOrgsDialog = async (tableId: string) => {
+  currentEditingTableId.value = tableId
+  await loadOrgTree()
+  // 获取当前表格的授权配置
+  try {
+    const res = await tableApi.getTable(tableId)
+    if (res.success && res.data) {
+      const allowedOrgs = res.data.allowedOrgs
+      tempAllowedOrgs.value = allowedOrgs ? JSON.parse(allowedOrgs) : []
+    }
+  } catch (error) {
+    console.error(error)
+    tempAllowedOrgs.value = []
+  }
+  showAllowedOrgsDialog.value = true
+}
+
+// 保存授权设置
+const saveAllowedOrgs = async () => {
+  if (!currentEditingTableId.value) return
+
+  savingAllowedOrgs.value = true
+  try {
+    await tableApi.updateAllowedOrgs(currentEditingTableId.value, tempAllowedOrgs.value)
+    ElMessage.success('授权设置已保存')
+    showAllowedOrgsDialog.value = false
+  } catch (error: any) {
+    ElMessage.error(error?.message || '保存授权失败')
+  } finally {
+    savingAllowedOrgs.value = false
+  }
 }
 
 const goToConfig = () => {

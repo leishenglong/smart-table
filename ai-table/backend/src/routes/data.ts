@@ -134,15 +134,20 @@ router.get('/:tableId', async (req: Request, res: Response) => {
     const filters = parseFilters(req.query.filters)
     const skip = (page - 1) * pageSize
 
-    // 构建权限过滤条件：只能看自己和子组织的数据
+    // 构建权限过滤条件：只能看自己和子组织的数据，但共享数据(orgId=null)对所有人可见
     let orgFilter: any = {}
     if (!isSuperAdmin(user.permissions)) {
       const accessibleOrgIds = await getAccessibleOrgIds(user.orgId)
       if (accessibleOrgIds.length > 0) {
-        // 包含自己及子组织的数据
-        orgFilter = { orgId: { in: accessibleOrgIds } }
+        // 包含自己及子组织的数据，以及共享数据(orgId=null)
+        orgFilter = {
+          OR: [
+            { orgId: { in: accessibleOrgIds } },
+            { orgId: null }
+          ]
+        }
       } else {
-        // 没有组织权限，只能看自己创建的（orgId = null）
+        // 没有组织权限，只能看共享数据(orgId = null)
         orgFilter = { orgId: null }
       }
     }

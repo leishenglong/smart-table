@@ -88,7 +88,7 @@ async function main() {
   // Check if admin user exists
   let admin = await prisma.user.findUnique({ where: { username: 'admin' } })
   if (!admin) {
-    const hashedPassword = await bcrypt.hash('admin123', 10)
+    const hashedPassword = await bcrypt.hash('123456', 10)
     admin = await prisma.user.create({
       data: {
         tenantId: tenant.id,
@@ -102,7 +102,7 @@ async function main() {
         }
       }
     })
-    console.log('Created admin user (admin / admin123)')
+    console.log('Created admin user (admin / 123456)')
   }
 }
 

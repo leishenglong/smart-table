@@ -138,11 +138,11 @@ router.post('/tasks', authenticate, async (req: Request, res: Response) => {
     }
 
     const { tenantId, tableId, name, description, deadline, requireLogin, allowAnonymous, targetOrgIds, createdBy } = req.body
-    
-    // 创建任务
+
+    // 创建任务（始终使用当前用户的租户ID，防止跨租户创建）
     const task = await (prisma.task as any).create({
       data: {
-        tenantId: tenantId || 'default',
+        tenantId: user.tenantId,
         tableId,
         name,
         description,

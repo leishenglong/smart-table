@@ -1,10 +1,9 @@
 import { Router, Request, Response } from 'express'
-import { PrismaClient } from '@prisma/client'
 import { authenticate } from '../middleware/authMiddleware'
 import bcrypt from 'bcrypt'
+import { prisma } from '../utils/prisma'
 
 const router = Router()
-const prisma: any = new PrismaClient()
 
 type DirectPermissionInput = {
   permissionId: string

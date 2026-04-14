@@ -1,9 +1,8 @@
 import { Router, Request, Response } from 'express'
-import { PrismaClient } from '@prisma/client'
 import { authenticate } from '../middleware/authMiddleware'
+import { prisma } from '../utils/prisma'
 
 const router = Router()
-const prisma: any = new PrismaClient()
 
 const getTenantId = (req: Request) => {
   return (req.headers['x-tenant-id'] as string) || req.user?.tenantId

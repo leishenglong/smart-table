@@ -1,9 +1,8 @@
 import { Router, Request, Response } from 'express'
-import { PrismaClient } from '@prisma/client'
 import { authenticate } from '../middleware/authMiddleware'
+import { prisma } from '../utils/prisma'
 
 const router = Router()
-const prisma: any = new PrismaClient()
 
 // 获取用户可访问的所有组织节点（包含自己及所有子节点）
 async function getAccessibleOrgIds(orgId: string | null): Promise<string[]> {

@@ -81,7 +81,7 @@ router.put('/:id', authenticate, async (req, res) => {
     if (!tenantId) return
 
     const existing = await prisma.organization.findFirst({
-      where: { id: req.params.id, tenantId }
+      where: { id: String(req.params.id), tenantId }
     })
 
     if (!existing) {
@@ -89,7 +89,7 @@ router.put('/:id', authenticate, async (req, res) => {
     }
 
     const org = await prisma.organization.update({
-      where: { id: req.params.id },
+      where: { id: String(req.params.id) },
       data: req.body
     })
     res.json(org)
@@ -105,14 +105,14 @@ router.delete('/:id', authenticate, async (req, res) => {
     if (!tenantId) return
 
     const existing = await prisma.organization.findFirst({
-      where: { id: req.params.id, tenantId }
+      where: { id: String(req.params.id), tenantId }
     })
 
     if (!existing) {
       return res.status(404).json({ error: 'Organization not found' })
     }
 
-    await prisma.organization.delete({ where: { id: req.params.id } })
+    await prisma.organization.delete({ where: { id: String(req.params.id) } })
     res.json({ success: true })
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete organization' })

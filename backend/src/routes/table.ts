@@ -226,6 +226,9 @@ router.post('/', async (req: Request, res: Response) => {
 
     // 只有集团层面或超管可以创建表格
     if (!isSuperAdmin(user.permissions)) {
+      if (!user.orgId) {
+        return res.status(403).json({ success: false, message: '只有集团层面可以创建表格' })
+      }
       const org = await prisma.organization.findUnique({ where: { id: user.orgId } })
       if (!org || org.type !== 'group') {
         return res.status(403).json({ success: false, message: '只有集团层面可以创建表格' })
@@ -346,6 +349,9 @@ router.put('/:id/allowed-orgs', async (req: Request, res: Response) => {
     // 只有超管、创建者或集团层面可以修改授权
     if (!isSuperAdmin(user.permissions)) {
       if (existingTable.createdBy !== user.id) {
+        if (!user.orgId) {
+          return res.status(403).json({ success: false, message: '只有集团层面或表格创建者可以修改授权' })
+        }
         const org = await prisma.organization.findUnique({ where: { id: user.orgId } })
         if (!org || org.type !== 'group') {
           return res.status(403).json({ success: false, message: '只有集团层面或表格创建者可以修改授权' })

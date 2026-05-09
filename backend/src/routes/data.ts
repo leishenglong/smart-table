@@ -225,6 +225,9 @@ router.post('/:tableId', async (req: Request, res: Response) => {
 
     // 检查权限：超管或集团层面可以新增数据
     if (!isSuperAdmin(user.permissions)) {
+      if (!user.orgId) {
+        return res.status(403).json({ success: false, message: '只有集团层面可以新增表格数据' })
+      }
       const org = await prisma.organization.findUnique({ where: { id: user.orgId } })
       if (!org || org.type !== 'group') {
         return res.status(403).json({ success: false, message: '只有集团层面可以新增表格数据' })
@@ -388,6 +391,9 @@ router.put('/:tableId/batch-org', async (req: Request, res: Response) => {
 
     // 检查用户是否有权限修改（超管或集团层面）
     if (!isSuperAdmin(user.permissions)) {
+      if (!user.orgId) {
+        return res.status(403).json({ success: false, message: '只有集团层面可以设置数据归属' })
+      }
       const org = await prisma.organization.findUnique({ where: { id: user.orgId } })
       if (!org || org.type !== 'group') {
         return res.status(403).json({ success: false, message: '只有集团层面可以设置数据归属' })

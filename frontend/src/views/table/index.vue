@@ -177,7 +177,7 @@
           :filtered-value="filters[field.name] || []"
           :column-key="field.name"
           :fixed="field.config?.fixed || false"
-          min-width="150"
+          min-width="80"
         >
           <template #default="{ row }">
             <!-- 编辑模式 -->
@@ -743,8 +743,10 @@ onMounted(() => {
   --el-table-header-bg-color: #F3F4F6;
 }
 
-:deep(.custom-table .el-table__row) {
-  transition: all 0.2s ease;
+:deep(.custom-table .el-table__header th),
+:deep(.custom-table .el-table__body td) {
+  min-width: 0;
+  max-width: none;
 }
 
 :deep(.custom-table .el-table__row:hover > td) {

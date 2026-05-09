@@ -875,6 +875,10 @@ const parseExcel = async (file: File) => {
     }
 
     const headers = (jsonData[0] || []).map((h, i) => String(h ?? '').trim() || `字段${i + 1}`)
+    const maxCols = jsonData.reduce((max, row) => Math.max(max, row?.length || 0), 0)
+    while (headers.length < maxCols) {
+      headers.push(`字段${headers.length + 1}`)
+    }
     const dataRows = jsonData.slice(1).filter(row => row.some(cell => cell !== null && cell !== undefined && cell !== ''))
 
     const previewRows = dataRows.slice(0, 5).map(row => {
@@ -915,6 +919,10 @@ const importExcel = async () => {
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][]
 
     const headers = (jsonData[0] || []).map((h, i) => String(h ?? '').trim() || `字段${i + 1}`)
+    const maxCols = jsonData.reduce((max, row) => Math.max(max, row?.length || 0), 0)
+    while (headers.length < maxCols) {
+      headers.push(`字段${headers.length + 1}`)
+    }
     const rows = jsonData.slice(1).filter(row => row.some(cell => cell !== null && cell !== undefined && cell !== ''))
 
     const tableName = excelFile.value.name.replace(/\.[^/.]+$/, '') || `Excel导入_${Date.now()}`

@@ -71,7 +71,8 @@ const normalizeFieldName = (name: any) => String(name ?? '').trim()
 const getFieldValidationError = (fields: any) => {
   if (!Array.isArray(fields)) return null
 
-  const names = fields.map((field: any) => normalizeFieldName(field.name))
+  const validFields = fields.filter((f: any) => f != null)
+  const names = validFields.map((field: any) => normalizeFieldName(field.name))
   if (names.some(name => !name)) {
     return '字段名称不能为空'
   }
@@ -250,7 +251,7 @@ router.post('/', async (req: Request, res: Response) => {
         config: JSON.stringify(config || {}),
         allowedOrgs: JSON.stringify(defaultAllowedOrgs),
         fields: {
-          create: fields.map((field: any, index: number) => ({
+          create: fields.filter((f: any) => f != null).map((field: any, index: number) => ({
             name: normalizeFieldName(field.name),
             type: field.type,
             required: field.required || false,

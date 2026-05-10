@@ -1,7 +1,7 @@
 <template>
   <div ref="containerRef" class="univer-sheet-container">
     <div v-if="!isReady" class="flex items-center justify-center h-full">
-      <el-icon class="is-loading text-2xl text-primary"><Loading /></el-icon>
+      <el-icon class="is-loading text-2xl text-primary"><Loader2 /></el-icon>
       <span class="ml-2 text-text-secondary">加载中...</span>
     </div>
   </div>
@@ -12,7 +12,7 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useUniverSheet } from './composables/useUniverSheet'
 import type { TableConfig } from '@/types/univer'
 import { dataApi } from '@/api/table'
-import { Loading } from 'lucide-vue-next'
+import { Loader2 } from 'lucide-vue-next'
 
 interface Props {
   tableId?: string

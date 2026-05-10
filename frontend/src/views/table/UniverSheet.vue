@@ -73,11 +73,16 @@ watch(
 
 onMounted(() => {
   console.log('UniverSheet mounted, initializing...')
+  console.log('Container ref:', containerRef.value)
   if (containerRef.value) {
+    console.log('Container dimensions:', containerRef.value.offsetWidth, containerRef.value.offsetHeight)
+    console.log('Container parent dimensions:', containerRef.value.parentElement?.offsetWidth, containerRef.value.parentElement?.offsetHeight)
     initUniver(containerRef.value, {
       header: false,
       toolbar: true
     })
+  } else {
+    console.error('Container ref is null!')
   }
 })
 

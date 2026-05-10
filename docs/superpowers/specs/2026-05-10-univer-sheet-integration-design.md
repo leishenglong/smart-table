@@ -18,10 +18,8 @@
 - Excel 导入/导出功能（暂时搁置）
 - 协同编辑功能
 
-### 2.3 后续扩展
-- select 下拉选择字段自定义渲染器
-- checkbox 复选框字段自定义渲染器
-- Excel 导入/导出与 Univer 集成
+### 2.3 排除的字段类型
+select/checkbox 字段类型暂不支持，这些字段在 Univer Sheet 中将以 text 形式显示。
 
 ## 3. 架构
 
@@ -135,11 +133,11 @@ const univerData = tableRows.map(row => ({
 |------------|------------------|------|
 | text | String | 原生支持 |
 | number | Number | 原生支持 |
-| date | String (日期字符串) | 后续可扩展日期类型 |
-| email | String | 原生支持，格式校验可选 |
-| phone | String | 原生支持 |
-| select | String | 自定义渲染器（后续） |
-| checkbox | Boolean | 自定义渲染器（后续） |
+| date | String (YYYY-MM-DD) | 显示为文本 |
+| email | String | 显示为文本 |
+| phone | String | 显示为文本 |
+| select | String | 显示为文本 |
+| checkbox | Boolean | 显示为 TRUE/FALSE |
 
 ## 6. 实施步骤
 
@@ -155,10 +153,6 @@ const univerData = tableRows.map(row => ({
 2. 实现新增行
 3. 实现删除行
 4. 实现排序/筛选（利用 Univer 内置能力）
-
-### Phase 3: 自定义渲染器（后续）
-1. Select 下拉渲染器
-2. Checkbox 复选框渲染器
 
 ## 7. 依赖清单
 
@@ -178,9 +172,8 @@ const univerData = tableRows.map(row => ({
 
 | 风险 | 影响 | 应对措施 |
 |-----|------|---------|
-| Univer 与 Vue 3 兼容性 | 高 | 先验证 Demo，@univerjs/vue 官方支持 Vue 3 |
-| 复杂字段类型渲染 | 中 | Phase 1 先用基础类型，自定义渲染器后续实现 |
-| 性能问题（大数据量） | 中 | 分页加载，Univer 支持大数据量 |
+| Univer 与 Vue 3 兼容性 | 中 | 先验证 Demo，@univerjs/vue 官方支持 Vue 3 |
+| 性能问题（大数据量） | 低 | 分页加载，Univer 支持大数据量 |
 
 ## 9. 测试计划
 

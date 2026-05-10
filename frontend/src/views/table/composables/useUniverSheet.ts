@@ -85,16 +85,20 @@ export function useUniverSheet() {
 
     isLoading.value = true
     try {
+      console.log('[Univer] Loading data for table:', tableId)
       const res = await dataApi.getData(tableId, { page, pageSize })
+      console.log('[Univer] Data loaded:', res)
       if (res.success && res.data) {
         sheetData.value = res.data
         // 设置数据到 Univer Sheet
         setSheetData(config, res.data)
         return res.data
+      } else {
+        console.warn('[Univer] No data or failed response:', res)
       }
       return []
     } catch (error) {
-      console.error('Failed to load data:', error)
+      console.error('[Univer] Failed to load data:', error)
       return []
     } finally {
       isLoading.value = false
@@ -102,12 +106,36 @@ export function useUniverSheet() {
   }
 
   // 设置数据到 Univer Sheet
-  // 注意：Univer 0.22 的 API 需要通过 command/mutation 来修改单元格数据
-  // 这里暂时记录数据，实际的数据设置需要通过 Univer 的命令系统
   function setSheetData(config: TableConfig, data: TableRow[]) {
-    console.log('Setting sheet data:', { config, data })
-    // Univer 的数据操作需要通过 command 系统
-    // 目前先记录数据，实际渲染由 Univer Sheet UI 自动处理空白的 spreadsheet
+    console.log('[Univer] Setting sheet data, config fields:', config.fields?.length, 'data rows:', data.length)
+
+    const univer = univerInstance.value
+    if (!univer) {
+      console.error('[Univer] No univer instance!')
+      return
+    }
+
+    // 检查 univer 实例有哪些可用的方法
+    console.log('[Univer] Univer instance keys:', Object.keys(univer).slice(0, 20))
+
+    // 尝试获取 workbook
+    try {
+      // Univer 0.22 API: 尝试通过 getGlobal 或类似方法获取当前文档
+      const allUnits = (univer as any)._units
+      console.log('[Univer] All units:', allUnits)
+
+      if (allUnits) {
+        const sheetUnits = Array.from(allUnits.values()).filter((u: any) =>
+          u?.type?.toString().includes('SHEET')
+        )
+        console.log('[Univer] Sheet units:', sheetUnits.length)
+      }
+    } catch (e) {
+      console.error('[Univer] Error accessing univer:', e)
+    }
+
+    // 数据已经在 sheetData 中，可以通过 UI 查看
+    console.log('[Univer] Data is loaded in sheetData, total rows:', data.length)
   }
 
   onUnmounted(() => {

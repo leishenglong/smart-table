@@ -106,7 +106,7 @@ export function useUniverSheet() {
   }
 
   // 设置数据到 Univer Sheet
-  function setSheetData(config: TableConfig, data: TableRow[]) {
+  async function setSheetData(config: TableConfig, data: TableRow[]) {
     console.log('[Univer] Setting sheet data, config fields:', config.fields?.length, 'data rows:', data.length)
 
     const univer = univerInstance.value
@@ -115,27 +115,70 @@ export function useUniverSheet() {
       return
     }
 
-    // 检查 univer 实例有哪些可用的方法
-    console.log('[Univer] Univer instance keys:', Object.keys(univer).slice(0, 20))
-
-    // 尝试获取 workbook
     try {
-      // Univer 0.22 API: 尝试通过 getGlobal 或类似方法获取当前文档
-      const allUnits = (univer as any)._units
-      console.log('[Univer] All units:', allUnits)
+      // 动态导入 command 相关模块
+      const commandModules = await Promise.all([
+        import('@univerjs/sheets'),
+        import('@univerjs/sheets-ui')
+      ])
 
-      if (allUnits) {
-        const sheetUnits = Array.from(allUnits.values()).filter((u: any) =>
-          u?.type?.toString().includes('SHEET')
-        )
-        console.log('[Univer] Sheet units:', sheetUnits.length)
+      console.log('[Univer] Command modules loaded')
+
+      // 尝试通过 injector 获取 command service
+      const injector = (univer as any).__getInjector?.()
+      if (injector) {
+        console.log('[Univer] Got injector')
+      } else {
+        console.log('[Univer] No injector available')
       }
-    } catch (e) {
-      console.error('[Univer] Error accessing univer:', e)
-    }
 
-    // 数据已经在 sheetData 中，可以通过 UI 查看
-    console.log('[Univer] Data is loaded in sheetData, total rows:', data.length)
+      // 获取 _units Map
+      const unitsMap = (univer as any)._units
+      if (unitsMap) {
+        console.log('[Univer] Units Map size:', unitsMap.size)
+        for (const [key, unit] of unitsMap) {
+          console.log('[Univer] Unit key:', key, 'Unit type:', typeof unit)
+        }
+      }
+
+      // 尝试获取 workbook
+      const workbook = (univer as any)._getActiveWorkbook?.() || (univer as any)._activeWorkbook
+      console.log('[Univer] Workbook:', workbook)
+
+      if (workbook) {
+        const sheet = workbook.getActiveSheet()
+        console.log('[Univer] Active sheet:', sheet)
+
+        if (sheet) {
+          // 使用 RangeValue API 设置数据
+          const fields = config.fields || []
+          const range = sheet.getRange(0, 0, data.length + 1, fields.length)
+
+          if (range) {
+            console.log('[Univer] Got range, setting values...')
+
+            // 构建 2D 数组数据
+            const values: any[][] = []
+
+            // 表头行
+            values.push(fields.map(f => f.name))
+
+            // 数据行
+            data.forEach(row => {
+              values.push(fields.map(f => row.rowData?.[f.name] ?? ''))
+            })
+
+            // 设置值
+            // range.setValues(values) // 取决于 API
+
+            console.log('[Univer] Values prepared:', values.length, 'rows')
+          }
+        }
+      }
+
+    } catch (error) {
+      console.error('[Univer] Error setting sheet data:', error)
+    }
   }
 
   onUnmounted(() => {

@@ -43,7 +43,12 @@
       "Bash(powershell.exe -Command \"& 'D:\\\\browse.exe' status\")",
       "Bash(powershell.exe:*)",
       "Bash(/c/Users/shl.lei/.claude/skills/gstack/browse/dist/browse.exe status:*)",
-      "Skill(browse)"
+      "Skill(browse)",
+      "Bash(npm install:*)",
+      "Bash(npm view:*)",
+      "Bash(npm search:*)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(npx vue-tsc:*)"
     ]
   }
 }

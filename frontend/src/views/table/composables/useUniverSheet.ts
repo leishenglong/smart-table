@@ -30,6 +30,8 @@ export function useUniverSheet() {
 
   // 初始化 Univer
   function initUniver(container: HTMLElement, config?: { header?: boolean; toolbar?: boolean }) {
+    console.log('[Univer] Starting initialization...')
+
     // 动态导入 Univer 模块
     Promise.all([
       import('@univerjs/core'),
@@ -37,21 +39,35 @@ export function useUniverSheet() {
       import('@univerjs/sheets'),
       import('@univerjs/sheets-ui')
     ]).then(([{ Univer }, { UniverUIPlugin }, { UniverSheetsPlugin }, { UniverSheetsUIPlugin }]) => {
-      const univer = new Univer()
-      univer.registerPlugin(UniverUIPlugin, {
-        container,
-        header: config?.header ?? false,
-        toolbar: config?.toolbar ?? true,
-        footer: false,
-        contextMenu: true
-      })
-      univer.registerPlugin(UniverSheetsPlugin)
-      univer.registerPlugin(UniverSheetsUIPlugin)
+      console.log('[Univer] Modules loaded, creating instance...')
 
-      univerInstance.value = univer
-      isReady.value = true
+      try {
+        const univer = new Univer()
+        console.log('[Univer] Instance created, registering plugins...')
+
+        univer.registerPlugin(UniverUIPlugin, {
+          container,
+          header: config?.header ?? false,
+          toolbar: config?.toolbar ?? true,
+          footer: false,
+          contextMenu: true
+        })
+        console.log('[Univer] UIPlugin registered')
+
+        univer.registerPlugin(UniverSheetsPlugin)
+        console.log('[Univer] SheetsPlugin registered')
+
+        univer.registerPlugin(UniverSheetsUIPlugin)
+        console.log('[Univer] SheetsUIPlugin registered')
+
+        univerInstance.value = univer
+        isReady.value = true
+        console.log('[Univer] Initialization complete!')
+      } catch (err) {
+        console.error('[Univer] Error during initialization:', err)
+      }
     }).catch((error) => {
-      console.error('Failed to initialize Univer:', error)
+      console.error('[Univer] Failed to load modules:', error)
     })
   }
 

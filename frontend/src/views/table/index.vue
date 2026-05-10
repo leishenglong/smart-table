@@ -119,7 +119,7 @@
     </div>
 
     <!-- Univer Sheet -->
-    <div v-else class="flex flex-col h-full">
+    <div v-else class="flex flex-col" style="height: calc(100vh - 120px);">
       <!-- 顶部操作栏 -->
       <div class="h-16 bg-white border-b flex items-center px-6 justify-between">
         <div class="flex items-center gap-4">

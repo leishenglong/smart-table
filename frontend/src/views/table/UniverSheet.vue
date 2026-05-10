@@ -1,5 +1,10 @@
 <template>
-  <div ref="containerRef" class="univer-sheet-container" />
+  <div ref="containerRef" class="univer-sheet-container">
+    <div v-if="!isReady" class="flex items-center justify-center h-full">
+      <el-icon class="is-loading text-2xl text-primary"><Loading /></el-icon>
+      <span class="ml-2 text-text-secondary">加载中...</span>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -7,6 +12,7 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useUniverSheet } from './composables/useUniverSheet'
 import type { TableConfig } from '@/types/univer'
 import { dataApi } from '@/api/table'
+import { Loading } from 'lucide-vue-next'
 
 interface Props {
   tableId?: string
@@ -49,18 +55,20 @@ async function loadData() {
   }
 }
 
-// 监听配置和 tableId 变化，加载数据
+// 监听配置、tableId 和 isReady 变化，加载数据
 watch(
-  () => [props.config, props.tableId],
-  async ([newConfig, newTableId]) => {
-    if (newConfig && newTableId && isReady.value) {
-      await loadDataToSheet(newTableId as string, newConfig as TableConfig)
+  () => [props.config, props.tableId, isReady.value] as const,
+  ([newConfig, newTableId, ready]) => {
+    if (newConfig && newTableId && ready) {
+      console.log('Univer ready, loading data...')
+      loadDataToSheet(newTableId as string, newConfig as TableConfig)
     }
   },
-  { immediate: false }
+  { immediate: true }
 )
 
 onMounted(() => {
+  console.log('UniverSheet mounted, initializing...')
   if (containerRef.value) {
     initUniver(containerRef.value, {
       header: false,
@@ -85,5 +93,6 @@ defineExpose({
   width: 100%;
   height: 100%;
   min-height: 400px;
+  background-color: #fafafa;
 }
 </style>

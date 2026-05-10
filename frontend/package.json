@@ -9,6 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@univerjs/core": "^0.22.0",
+    "@univerjs/sheets": "^0.22.0",
+    "@univerjs/sheets-ui": "^0.22.0",
+    "@univerjs/ui": "^0.22.0",
     "axios": "^1.6.2",
     "element-plus": "^2.4.4",
     "lucide-vue-next": "^1.0.0",

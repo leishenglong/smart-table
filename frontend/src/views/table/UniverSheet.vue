@@ -25,7 +25,15 @@ const emit = defineEmits<{
 }>()
 
 const containerRef = ref<HTMLElement | null>(null)
-const { univerInstance, isReady, initUniver, dispose, loadDataToSheet } = useUniverSheet()
+const { univerInstance, isReady, isReadonly, setReadonly, initUniver, dispose, loadDataToSheet } = useUniverSheet()
+
+// 监听只读状态变化
+watch(
+  () => props.readonly,
+  (readonly) => {
+    setReadonly(readonly)
+  }
+)
 
 // 加载数据
 async function loadData() {

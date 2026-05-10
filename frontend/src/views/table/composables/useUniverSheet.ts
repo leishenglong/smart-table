@@ -7,7 +7,22 @@ export function useUniverSheet() {
   const univerInstance = shallowRef<Univer | null>(null)
   const isLoading = ref(false)
   const isReady = ref(false)
+  const isReadonly = ref(false)
   const sheetData = ref<any[]>([])
+
+  // 设置只读模式
+  function setReadonly(readonly: boolean) {
+    isReadonly.value = readonly
+    // Univer 0.22 中可能需要通过配置或命令来设置只读
+    // 目前先记录状态
+    if (univerInstance.value) {
+      const workbook = univerInstance.value.getActiveWorkbook()
+      if (workbook) {
+        // Univer 是否支持只读配置需要验证
+        // 如果不支持，可以通过禁用工具栏来达到效果
+      }
+    }
+  }
 
   // 初始化 Univer
   function initUniver(container: HTMLElement, config?: { header?: boolean; toolbar?: boolean }) {
@@ -133,6 +148,8 @@ export function useUniverSheet() {
     univerInstance,
     isLoading,
     isReady,
+    isReadonly,
+    setReadonly,
     sheetData,
     initUniver,
     dispose,

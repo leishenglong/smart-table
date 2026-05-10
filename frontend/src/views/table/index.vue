@@ -152,6 +152,7 @@
           v-if="tableConfig"
           :config="tableConfig"
           :table-id="route.params.id as string"
+          :readonly="!canEdit"
           class="h-full"
         />
         <div v-else class="flex items-center justify-center h-full">
@@ -280,6 +281,7 @@ const pageLoading = ref(true)
 const tableConfig = ref<TableConfig | null>(null)
 const tableData = ref<TableRow[]>([])
 const selectedRows = ref<TableRow[]>([])
+const canEdit = ref(false) // 是否可编辑
 
 const pagination = ref({
   page: 1,
@@ -321,6 +323,11 @@ const loadConfig = async () => {
         fields: (res.data.fields || []).map((field: any) => parseFieldConfig(field))
       }
       addForm.value = buildEmptyForm()
+
+      // TODO: 调用权限 API 获取用户角色
+      // 目前暂时设置为 true，后续接入权限系统
+      // 根据用户角色和表格 allowedOrgs 判断是否可编辑
+      canEdit.value = true
     }
   } catch (error) {
     console.error(error)

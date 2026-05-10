@@ -34,7 +34,7 @@ export function useUniverSheet() {
       import('@univerjs/ui'),
       import('@univerjs/sheets'),
       import('@univerjs/sheets-ui')
-    ]).then(([{ Univer }, { UniverUIPlugin }, { UniverSheetsPlugin }, { UniverSheetsUIPlugin }]) => {
+    ]).then(async ([{ Univer, UniverInstanceType, Tools }, { UniverUIPlugin }, { UniverSheetsPlugin }, { UniverSheetsUIPlugin }]) => {
       console.log('[Univer] Modules loaded, creating instance...')
 
       try {
@@ -55,6 +55,25 @@ export function useUniverSheet() {
 
         univer.registerPlugin(UniverSheetsUIPlugin)
         console.log('[Univer] SheetsUIPlugin registered')
+
+        // 创建默认的 sheet unit
+        console.log('[Univer] Creating default sheet unit...')
+        const unitId = Tools.generateRandomId()
+        univer.createUnit(UniverInstanceType.SHEET, {
+          id: unitId,
+          name: 'Sheet1',
+          sheetData: {
+            sheet1: {
+              id: 'sheet1',
+              cellData: {},
+              rowData: {},
+              columnData: {},
+              rowCount: 0,
+              columnCount: 0
+            }
+          }
+        })
+        console.log('[Univer] Sheet unit created with id:', unitId)
 
         univerInstance.value = univer
         isReady.value = true
@@ -116,64 +135,72 @@ export function useUniverSheet() {
     }
 
     try {
-      // 动态导入 command 相关模块
-      const commandModules = await Promise.all([
-        import('@univerjs/sheets'),
-        import('@univerjs/sheets-ui')
-      ])
-
-      console.log('[Univer] Command modules loaded')
-
-      // 尝试通过 injector 获取 command service
-      const injector = (univer as any).__getInjector?.()
-      if (injector) {
-        console.log('[Univer] Got injector')
-      } else {
-        console.log('[Univer] No injector available')
-      }
-
       // 获取 _units Map
       const unitsMap = (univer as any)._units
       if (unitsMap) {
         console.log('[Univer] Units Map size:', unitsMap.size)
         for (const [key, unit] of unitsMap) {
-          console.log('[Univer] Unit key:', key, 'Unit type:', typeof unit)
+          console.log('[Univer] Unit key:', key, 'Unit type:', (unit as any)?.constructor?.name)
         }
       }
 
-      // 尝试获取 workbook
-      const workbook = (univer as any)._getActiveWorkbook?.() || (univer as any)._activeWorkbook
-      console.log('[Univer] Workbook:', workbook)
+      // 获取 injector
+      const injector = (univer as any).__getInjector?.()
+      console.log('[Univer] Injector:', injector ? 'available' : 'not available')
 
-      if (workbook) {
+      // 通过 UniverInstanceService 获取所有 sheets
+      const [{ UniverInstanceType }] = await Promise.all([import('@univerjs/core')])
+      const allSheets = univer.getAllUnits(UniverInstanceType.SHEET)
+      console.log('[Univer] All sheets:', allSheets?.length)
+
+      if (allSheets && allSheets.length > 0) {
+        const workbook = allSheets[0]
+        console.log('[Univer] First sheet:', workbook)
+
+        // 获取 active sheet
         const sheet = workbook.getActiveSheet()
         console.log('[Univer] Active sheet:', sheet)
 
         if (sheet) {
-          // 使用 RangeValue API 设置数据
+          // 尝试设置数据
           const fields = config.fields || []
-          const range = sheet.getRange(0, 0, data.length + 1, fields.length)
 
-          if (range) {
-            console.log('[Univer] Got range, setting values...')
+          // 构建单元格数据 (row, col) -> { v: value, t: type }
+          const cellData = new Map<string, any>()
 
-            // 构建 2D 数组数据
-            const values: any[][] = []
+          // 设置表头
+          fields.forEach((field, col) => {
+            cellData.set(`${col}_0`, { v: field.name, t: 's' })
+          })
 
-            // 表头行
-            values.push(fields.map(f => f.name))
-
-            // 数据行
-            data.forEach(row => {
-              values.push(fields.map(f => row.rowData?.[f.name] ?? ''))
+          // 设置数据
+          data.forEach((row, rowIndex) => {
+            fields.forEach((field, col) => {
+              const value = row.rowData?.[field.name]
+              const type = field.type === 'number' ? 'n' : 's'
+              cellData.set(`${col}_${rowIndex + 1}`, { v: value, t: type })
             })
+          })
 
-            // 设置值
-            // range.setValues(values) // 取决于 API
+          console.log('[Univer] Cell data prepared, count:', cellData.size)
 
-            console.log('[Univer] Values prepared:', values.length, 'rows')
+          // 尝试使用 sheet 的 API
+          if (typeof sheet.importData === 'function') {
+            sheet.importData(Object.fromEntries(cellData))
+            console.log('[Univer] Data imported via importData')
+          } else if (typeof sheet.setCellData === 'function') {
+            for (const [pos, value] of cellData) {
+              const [col, row] = pos.split('_').map(Number)
+              sheet.setCellData(row, col, value)
+            }
+            console.log('[Univer] Data set via setCellData')
+          } else {
+            console.log('[Univer] No suitable import method found')
+            console.log('[Univer] Sheet methods:', Object.keys(sheet).filter(k => typeof (sheet as any)[k] === 'function').slice(0, 20))
           }
         }
+      } else {
+        console.log('[Univer] No sheets found!')
       }
 
     } catch (error) {

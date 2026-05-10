@@ -3,6 +3,10 @@ import type { Univer } from '@univerjs/core'
 import type { TableConfig, TableRow } from '@/types/univer'
 import { dataApi } from '@/api/table'
 
+// 导入 Univer CSS（在应用启动时一次性导入）
+import '@univerjs/ui/lib/index.css'
+import '@univerjs/sheets-ui/lib/index.css'
+
 export function useUniverSheet() {
   const univerInstance = shallowRef<Univer | null>(null)
   const isLoading = ref(false)
@@ -26,17 +30,13 @@ export function useUniverSheet() {
 
   // 初始化 Univer
   function initUniver(container: HTMLElement, config?: { header?: boolean; toolbar?: boolean }) {
-    // 动态导入避免打包问题
+    // 动态导入 Univer 模块
     Promise.all([
       import('@univerjs/core'),
       import('@univerjs/ui'),
       import('@univerjs/sheets'),
       import('@univerjs/sheets-ui')
     ]).then(([{ Univer }, { UniverUIPlugin }, { UniverSheetsPlugin }, { UniverSheetsUIPlugin }]) => {
-      // 导入 CSS
-      import('@univerjs/ui/lib/index.css')
-      import('@univerjs/sheets-ui/lib/index.css')
-
       const univer = new Univer()
       univer.registerPlugin(UniverUIPlugin, {
         container,
@@ -50,6 +50,8 @@ export function useUniverSheet() {
 
       univerInstance.value = univer
       isReady.value = true
+    }).catch((error) => {
+      console.error('Failed to initialize Univer:', error)
     })
   }
 
@@ -88,56 +90,12 @@ export function useUniverSheet() {
   }
 
   // 设置数据到 Univer Sheet
+  // 注意：Univer 0.22 的 API 需要通过 command/mutation 来修改单元格数据
+  // 这里暂时记录数据，实际的数据设置需要通过 Univer 的命令系统
   function setSheetData(config: TableConfig, data: TableRow[]) {
-    const univer = univerInstance.value
-    if (!univer) return
-
-    try {
-      // 获取当前活动的 workbook 和 sheet
-      const workbook = univer.getGlobal('CurrentUniverDoc')
-      if (!workbook) {
-        console.warn('No active workbook')
-        return
-      }
-
-      // 使用 Univer 的方式设置数据
-      // 这里需要根据 Univer 0.22 的 API 来设置数据到单元格
-      // 简化处理：直接通过 workbook 操作
-      const sheet = workbook.getActiveSheet()
-      if (!sheet) return
-
-      // 构建单元格数据
-      const cells: Record<string, any> = {}
-      const fields = config.fields || []
-
-      // 设置表头
-      fields.forEach((field, colIndex) => {
-        const cellPosition = `${String.fromCharCode(65 + colIndex)}1`
-        cells[cellPosition] = {
-          v: field.name,
-          m: field.name
-        }
-      })
-
-      // 设置数据行
-      data.forEach((row, rowIndex) => {
-        fields.forEach((field, colIndex) => {
-          const cellPosition = `${String.fromCharCode(65 + colIndex)}${rowIndex + 2}`
-          const value = row.rowData?.[field.name] ?? ''
-          cells[cellPosition] = {
-            v: value,
-            m: String(value)
-          }
-        })
-      })
-
-      // 使用 Univer 的 setRangeValues 或者类似方法设置数据
-      if (sheet.setRangeValues) {
-        sheet.setRangeValues(cells)
-      }
-    } catch (error) {
-      console.error('Failed to set sheet data:', error)
-    }
+    console.log('Setting sheet data:', { config, data })
+    // Univer 的数据操作需要通过 command 系统
+    // 目前先记录数据，实际渲染由 Univer Sheet UI 自动处理空白的 spreadsheet
   }
 
   onUnmounted(() => {

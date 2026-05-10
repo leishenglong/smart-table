@@ -48,7 +48,8 @@
       "Bash(npm view:*)",
       "Bash(npm search:*)",
       "WebFetch(domain:www.npmjs.com)",
-      "Bash(npx vue-tsc:*)"
+      "Bash(npx vue-tsc:*)",
+      "Bash(grep -rn \"registerPlugin\\\\|new Univer\" frontend/node_modules/@univerjs/*/lib/index.js)"
     ]
   }
 }

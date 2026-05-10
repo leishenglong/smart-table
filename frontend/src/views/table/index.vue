@@ -151,6 +151,7 @@
         <UniverSheet
           v-if="tableConfig"
           :config="tableConfig"
+          :table-id="route.params.id as string"
           class="h-full"
         />
         <div v-else class="flex items-center justify-center h-full">

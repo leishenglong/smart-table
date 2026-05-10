@@ -6,29 +6,50 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useUniverSheet } from './composables/useUniverSheet'
 import type { TableConfig } from '@/types/univer'
+import { dataApi } from '@/api/table'
 
 interface Props {
+  tableId?: string
   config?: TableConfig | null
   readonly?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  tableId: '',
   config: null,
   readonly: false
 })
 
-const containerRef = ref<HTMLElement | null>(null)
-const { univerInstance, isReady, initUniver, dispose } = useUniverSheet()
+const emit = defineEmits<{
+  (e: 'dataLoaded', data: any[]): void
+}>()
 
-// 监听配置变化，重新初始化
-watch(
-  () => props.config,
-  (newConfig) => {
-    if (newConfig && isReady.value) {
-      // 配置变化时可以重新加载数据
-      console.log('Table config changed:', newConfig)
+const containerRef = ref<HTMLElement | null>(null)
+const { univerInstance, isReady, initUniver, dispose, loadDataToSheet } = useUniverSheet()
+
+// 加载数据
+async function loadData() {
+  if (!props.tableId || !props.config) return
+
+  try {
+    const res = await dataApi.getData(props.tableId, { page: 1, pageSize: 100 })
+    if (res.success && res.data) {
+      emit('dataLoaded', res.data)
     }
+  } catch (error) {
+    console.error('Failed to load data:', error)
   }
+}
+
+// 监听配置和 tableId 变化，加载数据
+watch(
+  () => [props.config, props.tableId],
+  async ([newConfig, newTableId]) => {
+    if (newConfig && newTableId && isReady.value) {
+      await loadDataToSheet(newTableId as string, newConfig as TableConfig)
+    }
+  },
+  { immediate: false }
 )
 
 onMounted(() => {
@@ -46,7 +67,8 @@ onUnmounted(() => {
 
 defineExpose({
   univerInstance,
-  isReady
+  isReady,
+  loadData
 })
 </script>
 

@@ -8,6 +8,10 @@
 </template>
 
 <script setup lang="ts">
+// 导入 Univer CSS
+import '@univerjs/ui/lib/index.css'
+import '@univerjs/sheets-ui/lib/index.css'
+
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useUniverSheet } from './composables/useUniverSheet'
 import type { TableConfig } from '@/types/univer'

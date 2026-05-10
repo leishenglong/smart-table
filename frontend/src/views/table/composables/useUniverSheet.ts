@@ -3,10 +3,6 @@ import type { Univer } from '@univerjs/core'
 import type { TableConfig, TableRow } from '@/types/univer'
 import { dataApi } from '@/api/table'
 
-// 导入 Univer CSS（在应用启动时一次性导入）
-import '@univerjs/ui/lib/index.css'
-import '@univerjs/sheets-ui/lib/index.css'
-
 export function useUniverSheet() {
   const univerInstance = shallowRef<Univer | null>(null)
   const isLoading = ref(false)

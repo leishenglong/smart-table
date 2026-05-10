@@ -58,7 +58,8 @@ export function useUniverSheet() {
 
         // 创建默认的 sheet unit
         console.log('[Univer] Creating default sheet unit...')
-        const unitId = Tools.generateRandomId()
+        const { generateRandomId } = await import('@univerjs/core')
+        const unitId = generateRandomId(6)
         univer.createUnit(UniverInstanceType.SHEET, {
           id: unitId,
           name: 'Sheet1',

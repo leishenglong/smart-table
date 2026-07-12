@@ -119,45 +119,16 @@
     </div>
 
     <!-- Univer Sheet -->
-    <div v-else class="flex flex-col" style="height: calc(100vh - 120px);">
-      <!-- 顶部操作栏 -->
-      <div class="h-16 bg-white border-b flex items-center px-6 justify-between">
-        <div class="flex items-center gap-4">
-          <button @click="goBack" class="flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-            </svg>
-          </button>
-          <h1 class="text-xl font-bold text-text-primary">{{ tableConfig?.name || '加载中...' }}</h1>
-        </div>
-        <div class="flex items-center gap-3">
-          <el-button @click="exportData" class="!rounded-lg shadow-sm hover:shadow-md transition-shadow">
-            <template #icon>
-              <el-icon><Download /></el-icon>
-            </template>
-            导出
-          </el-button>
-          <el-button type="primary" @click="openAddDialog" class="!rounded-lg shadow-md hover:shadow-lg transition-shadow">
-            <template #icon>
-              <el-icon><Plus /></el-icon>
-            </template>
-            新增数据
-          </el-button>
-        </div>
-      </div>
-
-      <!-- Univer Sheet 容器 -->
-      <div class="flex-1 overflow-hidden">
-        <UniverSheet
-          v-if="tableConfig"
-          :config="tableConfig"
-          :table-id="route.params.id as string"
-          :readonly="!canEdit"
-          class="h-full"
-        />
-        <div v-else class="flex items-center justify-center h-full">
-          <el-icon class="is-loading text-2xl text-primary"><Loading /></el-icon>
-        </div>
+    <div v-else class="flex flex-col" style="height: calc(100vh - 180px);">
+      <UniverSheet
+        v-if="tableConfig"
+        :config="tableConfig"
+        :table-id="route.params.id as string"
+        :readonly="!canEdit"
+        class="h-full"
+      />
+      <div v-else class="flex items-center justify-center h-full">
+        <el-icon class="is-loading text-2xl text-primary"><Loading /></el-icon>
       </div>
     </div>
 

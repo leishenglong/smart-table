@@ -371,7 +371,7 @@
     <el-dialog
       v-model="showExcelDialog"
       title="Excel 导入"
-      width="700px"
+      width="800px"
       class="!rounded-2xl"
       :close-on-click-modal="false"
     >
@@ -404,17 +404,47 @@
           </el-button>
         </div>
 
-        <div v-if="excelPreview" class="border border-border rounded-xl p-4">
+        <!-- Sheet 与表头配置 -->
+        <div v-if="excelSheets.length > 0" class="grid grid-cols-2 gap-4">
+          <el-form-item label="要导入的工作表" class="!mb-0 col-span-2">
+            <el-checkbox-group v-model="excelOptions.selectedSheets">
+              <el-checkbox v-for="sheet in excelSheets" :key="sheet" :label="sheet" :value="sheet">
+                {{ sheet }}
+              </el-checkbox>
+            </el-checkbox-group>
+          </el-form-item>
+
+          <el-form-item label="表头前跳过行数" class="!mb-0">
+            <el-input-number v-model="excelOptions.headerOffset" :min="0" :max="20" class="!w-full" />
+          </el-form-item>
+
+          <el-form-item label="表头占用行数" class="!mb-0">
+            <el-input-number v-model="excelOptions.headerRowCount" :min="1" :max="3" class="!w-full" />
+          </el-form-item>
+        </div>
+
+        <!-- 数据预览 -->
+        <div v-if="parsedResult?.sheets.length" class="border border-border rounded-xl p-4">
           <div class="flex items-center justify-between mb-3">
             <span class="text-sm font-medium text-text-primary">数据预览</span>
             <el-tag type="info" size="small">前5行</el-tag>
           </div>
-          <div class="overflow-auto max-h-60">
+
+          <el-tabs v-if="parsedResult.sheets.length > 1" v-model="activePreviewSheet" type="border-card" class="preview-tabs">
+            <el-tab-pane
+              v-for="sheet in parsedResult.sheets"
+              :key="sheet.sheetName"
+              :label="`${sheet.sheetName} (${sheet.totalRows}行)`"
+              :name="sheet.sheetName"
+            />
+          </el-tabs>
+
+          <div class="overflow-auto max-h-60 mt-3">
             <table class="w-full text-sm">
               <thead>
                 <tr class="bg-background-secondary">
                   <th
-                    v-for="header in excelPreview.headers"
+                    v-for="header in currentPreviewSheet?.headers"
                     :key="header"
                     class="border border-border p-2 text-left font-medium text-text-primary"
                   >
@@ -423,9 +453,9 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(row, index) in excelPreview.previewRows" :key="index">
+                <tr v-for="(row, index) in currentPreviewSheet?.previewRows" :key="index">
                   <td
-                    v-for="header in excelPreview.headers"
+                    v-for="header in currentPreviewSheet?.headers"
                     :key="header"
                     class="border border-border p-2 text-text-secondary"
                   >
@@ -436,8 +466,8 @@
             </table>
           </div>
           <div class="mt-3 text-xs text-text-tertiary flex items-center gap-4">
-            <span>识别到 {{ excelPreview.headers.length }} 个字段</span>
-            <span>{{ excelPreview.totalRows }} 行数据</span>
+            <span>识别到 {{ currentPreviewSheet?.headers.length || 0 }} 个字段</span>
+            <span>{{ currentPreviewSheet?.totalRows || 0 }} 行数据</span>
           </div>
         </div>
       </div>
@@ -448,11 +478,11 @@
             type="primary"
             @click="importExcel"
             :loading="excelLoading"
-            :disabled="!excelFile"
+            :disabled="!excelFile || excelOptions.selectedSheets.length === 0"
             class="!rounded-lg"
           >
             <el-icon class="mr-1"><Download /></el-icon>
-            导入并创建
+            {{ excelOptions.selectedSheets.length > 1 ? `导入并创建 ${excelOptions.selectedSheets.length} 个表格` : '导入并创建' }}
           </el-button>
         </div>
       </template>
@@ -489,12 +519,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { tableApi, aiApi, dataApi } from '@/api/table'
 import { organizationApi } from '@/api/organization'
-import type { TableConfig } from '@/types/table'
+import type { TableConfig, TableField, FieldType } from '@/types/table'
+import type { ParsedSheet, ParsedExcelResult } from '@/utils/excelImport'
+import { parseExcelFile, getWorkbookSheetNames } from '@/utils/excelImport'
 import {
   Zap,
   ArrowRight,
@@ -553,6 +585,31 @@ const jsonInput = ref('')
 const excelFile = ref<File | null>(null)
 const excelLoading = ref(false)
 const excelPreview = ref<any>(null)
+
+// 复杂 Excel 导入相关状态
+const excelSheets = ref<string[]>([])
+const excelOptions = ref({
+  selectedSheets: [] as string[],
+  headerOffset: 0,
+  headerRowCount: 1
+})
+const parsedResult = ref<ParsedExcelResult | null>(null)
+const activePreviewSheet = ref<string>('')
+
+const currentPreviewSheet = computed(() => {
+  if (!parsedResult.value) return null
+  return parsedResult.value.sheets.find((s) => s.sheetName === activePreviewSheet.value) || parsedResult.value.sheets[0] || null
+})
+
+// 当选项变化时重新解析
+watch(
+  excelOptions,
+  async () => {
+    if (!excelFile.value || excelOptions.value.selectedSheets.length === 0) return
+    await parseExcel(excelFile.value)
+  },
+  { deep: true }
+)
 
 // 统计数据
 const stats = computed(() => [
@@ -854,124 +911,131 @@ const importJSON = async () => {
 
 const handleExcelUpload = (file: File) => {
   excelFile.value = file
-  parseExcel(file)
+  resetExcelState(false)
+  initExcelSheets(file)
   return false
 }
 
-const parseExcel = async (file: File) => {
-  excelLoading.value = true
+const resetExcelState = (clearFile = true) => {
+  if (clearFile) excelFile.value = null
+  excelPreview.value = null
+  excelSheets.value = []
+  excelOptions.value = {
+    selectedSheets: [],
+    headerOffset: 0,
+    headerRowCount: 1
+  }
+  parsedResult.value = null
+  activePreviewSheet.value = ''
+}
+
+const initExcelSheets = async (file: File) => {
   try {
-    const XLSX = await import('xlsx')
-    const data = await file.arrayBuffer()
-    const workbook = XLSX.read(data, { type: 'array' })
-
-    const firstSheetName = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[firstSheetName]
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][]
-
-    if (jsonData.length === 0) {
-      ElMessage.warning('Excel文件为空')
+    excelSheets.value = await getWorkbookSheetNames(file)
+    if (excelSheets.value.length === 0) {
+      ElMessage.warning('Excel 文件没有工作表')
       return
     }
+    // 选中第一个 sheet；parseExcel 由 watch 触发
+    excelOptions.value.selectedSheets = [excelSheets.value[0]]
+  } catch (error: any) {
+    console.error(error)
+    ElMessage.error(error?.message || 'Excel 解析失败')
+  }
+}
 
-    const headers = (jsonData[0] || []).map((h, i) => String(h ?? '').trim() || `字段${i + 1}`)
-    const maxCols = jsonData.reduce((max, row) => Math.max(max, row?.length || 0), 0)
-    while (headers.length < maxCols) {
-      headers.push(`字段${headers.length + 1}`)
-    }
-    const dataRows = jsonData.slice(1).filter(row => row.some(cell => cell !== null && cell !== undefined && cell !== ''))
+const parseExcel = async (file: File) => {
+  if (excelOptions.value.selectedSheets.length === 0) {
+    parsedResult.value = null
+    return
+  }
 
-    const previewRows = dataRows.slice(0, 5).map(row => {
-      const rowData: Record<string, any> = {}
-      headers.forEach((header, index) => {
-        rowData[header] = row[index] ?? ''
-      })
-      return rowData
+  excelLoading.value = true
+  try {
+    parsedResult.value = await parseExcelFile(file, excelOptions.value.selectedSheets, {
+      headerOffset: excelOptions.value.headerOffset,
+      headerRowCount: excelOptions.value.headerRowCount
     })
 
-    excelPreview.value = {
-      headers,
-      previewRows,
-      totalRows: dataRows.length
+    // 兼容旧 preview 数据，默认显示第一个 sheet
+    const firstSheet = parsedResult.value.sheets[0]
+    if (firstSheet) {
+      activePreviewSheet.value = firstSheet.sheetName
+      excelPreview.value = {
+        headers: firstSheet.headers,
+        previewRows: firstSheet.previewRows,
+        totalRows: firstSheet.totalRows
+      }
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error(error)
-    ElMessage.error('Excel解析失败')
+    ElMessage.error(error?.message || 'Excel 解析失败')
+    parsedResult.value = null
   } finally {
     excelLoading.value = false
   }
 }
 
 const importExcel = async () => {
-  if (!excelFile.value || !excelPreview.value) {
-    ElMessage.warning('请先选择Excel文件')
+  if (!excelFile.value || !parsedResult.value || parsedResult.value.sheets.length === 0) {
+    ElMessage.warning('请先选择要导入的 Excel 工作表')
     return
   }
 
   excelLoading.value = true
+  const createdTableIds: string[] = []
+  const fileBaseName = excelFile.value.name.replace(/\.[^/.]+$/, '') || `Excel导入_${Date.now()}`
+
   try {
-    const XLSX = await import('xlsx')
-    const data = await excelFile.value.arrayBuffer()
-    const workbook = XLSX.read(data, { type: 'array' })
+    const sheets = parsedResult.value.sheets
+    for (let i = 0; i < sheets.length; i++) {
+      const sheet = sheets[i]
+      ElMessage.info(`正在导入第 ${i + 1}/${sheets.length} 个表格：${sheet.sheetName}`)
 
-    const firstSheetName = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[firstSheetName]
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][]
+      const tableName = sheets.length === 1
+        ? fileBaseName
+        : `${fileBaseName}_${sheet.sheetName}`
 
-    const headers = (jsonData[0] || []).map((h, i) => String(h ?? '').trim() || `字段${i + 1}`)
-    const maxCols = jsonData.reduce((max, row) => Math.max(max, row?.length || 0), 0)
-    while (headers.length < maxCols) {
-      headers.push(`字段${headers.length + 1}`)
-    }
-    const rows = jsonData.slice(1).filter(row => row.some(cell => cell !== null && cell !== undefined && cell !== ''))
+      const res = await tableApi.createTable({
+        name: tableName,
+        description: `从 Excel「${sheet.sheetName}」导入，共 ${sheet.totalRows} 行数据`,
+        fields: sheet.fields
+      })
 
-    const tableName = excelFile.value.name.replace(/\.[^/.]+$/, '') || `Excel导入_${Date.now()}`
-
-    const fields = headers.map((header, index) => {
-      const samples = rows.map(row => row[index]).filter(v => v !== null && v !== undefined && v !== '')
-      let type = 'text'
-      if (samples.length > 0) {
-        const allNumbers = samples.every(v => !isNaN(Number(v)))
-        if (allNumbers) type = 'number'
+      if (!res.success || !res.data?.id) {
+        throw new Error(`创建表格失败：${sheet.sheetName}`)
       }
-      return { name: header, type, required: false, config: {} }
-    })
 
-    const res = await tableApi.createTable({
-      name: tableName,
-      description: `从Excel导入，共${rows.length}行数据`,
-      fields
-    })
-
-    if (res.success && res.data?.id) {
-      
       const tableId = res.data.id
-      if (rows.length > 0) {
-        const importData = rows.map(row => {
+      createdTableIds.push(tableId)
+
+      if (sheet.rows.length > 0) {
+        const importData = sheet.rows.map((row) => {
           const rowData: Record<string, any> = {}
-          headers.forEach((header, index) => {
+          sheet.headers.forEach((header, index) => {
             rowData[header] = row[index] ?? ''
           })
           return rowData
         })
 
         const batchSize = 100
-        for (let i = 0; i < importData.length; i += batchSize) {
-          const batch = importData.slice(i, i + batchSize)
+        for (let j = 0; j < importData.length; j += batchSize) {
+          const batch = importData.slice(j, j + batchSize)
           await dataApi.importBatch(tableId, batch)
         }
       }
-
-      ElMessage.success(`导入成功，共${rows.length}条数据`)
-      showExcelDialog.value = false
-      excelFile.value = null
-      excelPreview.value = null
-      loadTables()
-      router.push(`/table/${tableId}`)
     }
-  } catch (error) {
+
+    ElMessage.success(`导入成功，共创建 ${createdTableIds.length} 个表格`)
+    showExcelDialog.value = false
+    resetExcelState()
+    loadTables()
+    if (createdTableIds[0]) {
+      router.push(`/table/${createdTableIds[0]}`)
+    }
+  } catch (error: any) {
     console.error(error)
-    ElMessage.error('导入失败')
+    ElMessage.error(error?.message || '导入失败')
   } finally {
     excelLoading.value = false
   }
@@ -979,8 +1043,7 @@ const importExcel = async () => {
 
 const cancelExcelImport = () => {
   showExcelDialog.value = false
-  excelFile.value = null
-  excelPreview.value = null
+  resetExcelState()
 }
 
 onMounted(() => {

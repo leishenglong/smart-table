@@ -28,6 +28,7 @@ export interface TableConfig {
   description?: string
   config: Record<string, any>
   fields: TableField[]
+  allowedOrgs?: string // JSON 序列化的组织 ID 列表
   createdAt?: string
   updatedAt?: string
 }
